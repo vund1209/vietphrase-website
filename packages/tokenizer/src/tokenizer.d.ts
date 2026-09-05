@@ -18,7 +18,13 @@ export interface TokenizerOptions {
 }
 
 export interface TokenizeContext {
-  novelId?: number;
+  /**
+   * Per-novel Name overrides, chinese phrase -> raw vietnamese value.
+   * Fetch these from Postgres's `Name` table for the current novel (one
+   * query per chapter translation), not per substring. See
+   * docs/ARCHITECTURE.md "Data split".
+   */
+  overrides?: Map<string, string>;
 }
 
 export declare class VietPhraseTokenizer {

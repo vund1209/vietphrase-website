@@ -39,7 +39,6 @@ function buildTestDb() {
   // deliberately no entry anywhere for "龘" 's neighbor char used below
 
   insertName.run("萧炎", "Tiêu Viêm", 2, null); // global
-  insertName.run("萧炎", "Viêm Nhi", 2, 1); // per-novel override, novel_id=1
 
   setup.close();
   return { dbPath, cleanup: () => rmSync(dir, { recursive: true, force: true }) };
@@ -67,12 +66,29 @@ test("longest match wins over a shorter, higher-priority match", () => {
   cleanup();
 });
 
-test("per-novel name scoping falls back to global when no override exists", () => {
+test("per-novel override (Postgres-shaped Map) beats the global SQLite name", () => {
   const { dbPath, cleanup } = buildTestDb();
   const tok = new VietPhraseTokenizer(dbPath);
-  assert.equal(tok.tokenize("萧炎", { novelId: 1 })[0].vietnamese, "Viêm Nhi");
-  assert.equal(tok.tokenize("萧炎", { novelId: 999 })[0].vietnamese, "Tiêu Viêm");
+  const overrides = new Map([["萧炎", "Viêm Nhi"]]);
+  assert.equal(tok.tokenize("萧炎", { overrides })[0].vietnamese, "Viêm Nhi");
+  // A novel with no override for this phrase (empty or unrelated Map)
+  // falls back to the global SQLite name, same as passing none at all.
+  assert.equal(tok.tokenize("萧炎", { overrides: new Map() })[0].vietnamese, "Tiêu Viêm");
   assert.equal(tok.tokenize("萧炎")[0].vietnamese, "Tiêu Viêm");
+  tok.close();
+  cleanup();
+});
+
+test("override longer than any SQLite entry still wins the longest-match scan", () => {
+  const { dbPath, cleanup } = buildTestDb();
+  const tok = new VietPhraseTokenizer(dbPath);
+  // Longest phrase in the seeded test db is 5 chars ("自己的人生"); this
+  // override is 6, checking that the scan window grows to cover it.
+  const overrides = new Map([["自己的人生啊", "ôi nhân sinh của mình"]]);
+  const tokens = tok.tokenize("自己的人生啊", { overrides });
+  assert.equal(tokens.length, 1);
+  assert.equal(tokens[0].source, "name");
+  assert.equal(tokens[0].vietnamese, "ôi nhân sinh của mình");
   tok.close();
   cleanup();
 });

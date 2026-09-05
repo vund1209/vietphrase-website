@@ -9,16 +9,21 @@ record of that validation run.
 
 ## Status
 
-Interim data source: reads a `dictionary_seed.db`-shaped SQLite file
-directly via Node's built-in (experimental) `node:sqlite`. Once the live
-app has a Postgres database (`prisma/schema.prisma`), the lookup
-statements should move to Prisma queries — the public `tokenize()`
-contract (input text + optional `novelId` in, an array of `Token` out) is
-intended to survive that swap unchanged.
+Bulk dictionary data source (names/pronouns/words/hanviet_fallback): a
+`dictionary_seed.db`-shaped SQLite file, read directly via Node's
+built-in (experimental) `node:sqlite`. This is the permanent design, not
+an interim one — see `docs/ARCHITECTURE.md` "Data split" for why that
+~226 MB of static, rebuilt-from-source data stays in SQLite rather than
+Postgres. This module never talks to Postgres/Prisma itself.
 
-Not yet wired into any app — no Next.js project exists yet. This is a
-standalone, dependency-free package so it can be developed and tested in
-isolation before that decision is made.
+Per-novel Name overrides (the one thing that *is* live, mutable app
+data) live in Postgres's `Name` table and are the caller's
+responsibility to fetch and pass in as the `overrides` map on each
+`tokenize()` call — see "Usage" below.
+
+Wired into the Next.js app's `/api/translate` route (no novel context —
+global resolution only). The reading library, which would supply
+per-novel `overrides`, doesn't exist yet.
 
 No npm dependencies. Requires Node >= 22 (uses `node:sqlite` and
 `node:test`, both built in).
@@ -33,8 +38,12 @@ const tokens = tok.tokenize("萧炎缓缓睁开双眼");
 // [{ source: "name", chinese: "萧炎", vietnamese: "Tiêu Viêm", ... }, ...]
 
 // Per-novel name override, falls back to the global name if the novel
-// has no override for that phrase:
-tok.tokenize("萧炎", { novelId: 42 });
+// has no override for that phrase. Fetch these from Postgres's `Name`
+// table once per chapter translation (not per substring), build a Map,
+// and pass it in -- see docs/ARCHITECTURE.md "Data split":
+const overrides = new Map([["萧炎", "Viêm Nhi"]]);
+tok.tokenize("萧炎", { overrides }); // -> "Viêm Nhi"
+tok.tokenize("萧炎"); // no overrides -> falls back to global "Tiêu Viêm"
 
 tok.close();
 ```

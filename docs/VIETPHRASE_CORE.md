@@ -135,7 +135,7 @@ prototype once it proved out. Same algorithm, same data source for now
 Postgres queries once that exists, without changing its `tokenize()`
 contract), but with proper types (JSDoc), a pluggable alternate-
 translation selector, per-novel scoping support, and a real test suite
-(`npm test` in that package — 10 tests: isolated unit tests against a
+(`npm test` in that package — 11 tests: isolated unit tests against a
 synthetic database, plus real-data regression spot-checks). This is what
 future app code should import; the prototype is not meant to be reused.
 

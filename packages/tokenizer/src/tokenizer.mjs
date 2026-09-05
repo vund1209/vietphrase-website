@@ -3,22 +3,28 @@
  *
  * Implements the algorithm specified in docs/VIETPHRASE_CORE.md: at each
  * position, try match lengths from longest to shortest; at each length,
- * check names(novel) -> names(global) -> pronouns -> words, in that
- * priority order; the first hit at the LONGEST length wins (longest-match
- * beats category priority; category priority only breaks same-length
- * ties). Falls back to a single Han-Viet character reading, then the raw
- * character, if nothing matches at all.
+ * check overrides(per-novel) -> names(global) -> pronouns -> words, in
+ * that priority order; the first hit at the LONGEST length wins
+ * (longest-match beats category priority; category priority only breaks
+ * same-length ties). Falls back to a single Han-Viet character reading,
+ * then the raw character, if nothing matches at all.
  *
  * This is the production module, promoted from prototype/tokenizer.mjs
  * after that prototype found and fixed two real bugs (a pronoun-priority
  * inversion, and numeral/date junk that had leaked into `words`) -- see
- * VIETPHRASE_CORE.md "Validation" for that history. The public
- * tokenize() contract is deliberately data-source-agnostic in spirit,
- * even though the constructor currently only knows how to read a
- * dictionary_seed.db-shaped SQLite file directly (via the built-in,
- * still-experimental `node:sqlite`) -- once the live app has a Postgres
- * database (see prisma/schema.prisma), swap the lookup statements for
- * Prisma queries without changing what tokenize() returns.
+ * VIETPHRASE_CORE.md "Validation" for that history.
+ *
+ * Data sources, per docs/ARCHITECTURE.md "Data split" (2026-09-05): the
+ * bulk dictionary (names/pronouns/words/hanviet_fallback) reads directly
+ * from a dictionary_seed.db-shaped SQLite file via the built-in, still-
+ * experimental `node:sqlite` -- this is not an interim measure, it's the
+ * permanent design, since that data is static and duplicating it into
+ * Postgres would blow a free-tier storage budget for no benefit. Only
+ * per-novel Name overrides live in Postgres; the caller is responsible
+ * for fetching those (one query per chapter translation, not one per
+ * substring -- see ARCHITECTURE.md) and passing them in as the
+ * `overrides` map on each `tokenize()` call. This module never talks to
+ * Postgres/Prisma itself.
  *
  * Open decisions this module takes a stance on for now, tracked in
  * VIETPHRASE_CORE.md "Open decisions" -- revisit before relying on the
@@ -54,6 +60,20 @@ import { DatabaseSync } from "node:sqlite";
  *   MAX(phrase_length) found in the database.
  */
 
+/**
+ * @typedef {Object} TokenizeContext
+ * @property {Map<string, string>} [overrides]
+ *   Per-novel Name overrides, chinese phrase -> raw vietnamese value
+ *   (same "a/b/c" alternatives format as the SQLite tables, run through
+ *   the same pickAlternative). Checked before the SQLite global names
+ *   table at every candidate match length. Build this from Postgres's
+ *   `Name` rows for the current novel (one query per chapter
+ *   translation), not from a per-substring lookup -- see
+ *   docs/ARCHITECTURE.md "Data split". Omit (or pass an empty Map) for
+ *   global-only resolution, e.g. the standalone translate page which has
+ *   no novel context at all.
+ */
+
 export class VietPhraseTokenizer {
   /**
    * @param {string} dbPath - path to a dictionary_seed.db-schema SQLite file
@@ -63,9 +83,10 @@ export class VietPhraseTokenizer {
     this.db = new DatabaseSync(dbPath, { readOnly: true });
     this.pickAlternative = options.pickAlternative ?? ((alts) => alts.split("/")[0]);
 
-    this._stmtNameScoped = this.db.prepare(
-      "SELECT vietnamese_phrase FROM names WHERE chinese_phrase = ? AND novel_id = ?"
-    );
+    // Global only: novel-scoped Name overrides now live in Postgres, not
+    // here (see docs/ARCHITECTURE.md "Data split"). The `novel_id IS
+    // NULL` filter is kept as a defensive check, not because this table
+    // is expected to ever contain non-null rows going forward.
     this._stmtNameGlobal = this.db.prepare(
       "SELECT vietnamese_phrase FROM names WHERE chinese_phrase = ? AND novel_id IS NULL"
     );
@@ -92,17 +113,23 @@ export class VietPhraseTokenizer {
 
   /**
    * @param {string} text
-   * @param {{novelId?: number}} [context]
-   *   novelId scopes `names` lookups to that novel first, falling back to
-   *   the global name if the novel has no override. Omit for global-only
-   *   resolution. See VIETPHRASE_CORE.md "Per-novel name resolution".
+   * @param {TokenizeContext} [context]
    * @returns {Token[]}
    */
   tokenize(text, context = {}) {
+    const overrides = context.overrides;
+    // Overrides aren't known at construction time (they're per-novel,
+    // fetched by the caller per chapter), so the effective scan window
+    // has to account for them per call, not just at construction. Cheap:
+    // overrides are expected to be a few hundred rows at most.
+    const effectiveMax = overrides && overrides.size
+      ? Math.max(this.maxScanLength, ...Array.from(overrides.keys(), (k) => k.length))
+      : this.maxScanLength;
+
     const tokens = [];
     let pos = 0;
     while (pos < text.length) {
-      const match = this._longestMatchAt(text, pos, context.novelId);
+      const match = this._longestMatchAt(text, pos, overrides, effectiveMax);
       if (match) {
         tokens.push(this._toToken(match.source, match.chinese, match.vietnamese));
         pos += match.chinese.length;
@@ -126,18 +153,16 @@ export class VietPhraseTokenizer {
   }
 
   /** @private */
-  _longestMatchAt(text, pos, novelId) {
+  _longestMatchAt(text, pos, overrides, effectiveMax) {
     const remaining = text.length - pos;
-    const upper = Math.min(this.maxScanLength, remaining);
+    const upper = Math.min(effectiveMax, remaining);
     for (let len = upper; len >= 1; len--) {
       const candidate = text.slice(pos, pos + len);
 
-      if (novelId != null) {
-        const scoped = this._stmtNameScoped.get(candidate, novelId);
-        if (scoped) {
-          return { source: "name", chinese: candidate, vietnamese: scoped.vietnamese_phrase };
-        }
+      if (overrides && overrides.has(candidate)) {
+        return { source: "name", chinese: candidate, vietnamese: overrides.get(candidate) };
       }
+
       const globalName = this._stmtNameGlobal.get(candidate);
       if (globalName) {
         return { source: "name", chinese: candidate, vietnamese: globalName.vietnamese_phrase };
