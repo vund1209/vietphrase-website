@@ -130,6 +130,43 @@ export interface FetchedChapterList {
   chapters: ChapterListItem[];
 }
 
+interface BookMetaResult {
+  title: string | null;
+  description: string | null;
+  coverImageUrl: string | null;
+  author: string | null;
+}
+
+// Metadata always comes from the originally requested landing page --
+// where a site puts its og:description/og:image/meta[author] tags --
+// unless the adapter overrides this (see SiteAdapter.getBookMeta's doc
+// comment: some sites' meta tags are generic SEO boilerplate, not the
+// book's actual title/synopsis).
+function deriveBookMeta(
+  html: string,
+  bookUrl: string,
+  adapter: ReturnType<typeof resolveAdapter>
+): BookMetaResult {
+  return (
+    adapter?.getBookMeta?.(html, bookUrl) ?? {
+      title: extractPageTitle(html),
+      description: extractDescription(html),
+      coverImageUrl: extractCoverImageUrl(html),
+      author: extractAuthor(html),
+    }
+  );
+}
+
+// Book-level metadata only, no chapter list required -- used by the admin
+// "refresh metadata" action (src/app/api/novels/[slug]/refetch-metadata/route.ts),
+// which needs to re-derive title/description/author/cover without also
+// re-deriving (and risking a mismatch against) the already-stored chapter
+// list.
+export async function fetchBookMeta(bookUrl: string): Promise<BookMetaResult> {
+  const html = await fetchHtml(bookUrl);
+  return deriveBookMeta(html, bookUrl, resolveAdapter(bookUrl));
+}
+
 export async function fetchChapterList(bookUrl: string): Promise<FetchedChapterList> {
   const html = await fetchHtml(bookUrl);
   const adapter = resolveAdapter(bookUrl);
@@ -164,14 +201,14 @@ export async function fetchChapterList(bookUrl: string): Promise<FetchedChapterL
   }
 
   // Metadata (description/cover/author) always comes from the originally
-  // requested landing page, not a followed table-of-contents hop -- a
-  // TOC page is typically just a chapter list, while the landing page is
-  // where a site puts its og:description/og:image/meta[author] tags.
+  // requested landing page, not a followed table-of-contents hop -- a TOC
+  // page is typically just a chapter list.
+  const meta = deriveBookMeta(html, bookUrl, adapter);
   return {
-    bookTitle: extractPageTitle(html),
-    description: extractDescription(html),
-    coverImageUrl: extractCoverImageUrl(html),
-    author: extractAuthor(html),
+    bookTitle: meta.title,
+    description: meta.description,
+    coverImageUrl: meta.coverImageUrl,
+    author: meta.author,
     chapters,
   };
 }

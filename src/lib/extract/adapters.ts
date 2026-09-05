@@ -4,7 +4,7 @@
 // (chapterList.ts / chapterContent.ts) demonstrably fails on it.
 import * as cheerio from "cheerio";
 import { extractChapterContent } from "./chapterContent.ts";
-import type { ChapterListItem, SiteAdapter } from "./types";
+import type { BookMeta, ChapterListItem, SiteAdapter } from "./types";
 
 // book.sfacg.com: the generic extractor's link-clustering heuristics
 // (chapterList.ts) repeatedly false-positive-matched this site's
@@ -56,11 +56,41 @@ function sfacgGetChapterList(html: string, pageUrl: string): ChapterListItem[] {
   return items;
 }
 
+// book.sfacg.com's meta[name=description] is a generic SEO blurb (site
+// name + "online reading of <title>"), not the book's actual synopsis --
+// that lives in the landing page's own markup instead, alongside the
+// real title (its <title> tag also carries SEO suffixes the way the
+// meta description does) and author. Confirmed by fetching a real
+// landing page and inspecting its DOM directly.
+function sfacgGetBookMeta(html: string, pageUrl: string): BookMeta {
+  const $ = cheerio.load(html);
+  const summary = $(".summary-content").first();
+
+  const titleEl = summary.find("h1.title .text").first().clone();
+  titleEl.find(".tag").remove();
+  const title = titleEl.text().trim() || null;
+
+  const description = summary.find("p.introduce").first().text().trim() || null;
+  const author = summary.find(".author-name span").first().text().trim() || null;
+  const coverSrc = summary.parent().find(".summary-pic img").first().attr("src")?.trim();
+  let coverImageUrl: string | null = null;
+  if (coverSrc) {
+    try {
+      coverImageUrl = new URL(coverSrc, pageUrl).toString();
+    } catch {
+      coverImageUrl = null;
+    }
+  }
+
+  return { title, description, author, coverImageUrl };
+}
+
 const sfacgAdapter: SiteAdapter = {
   name: "book.sfacg.com",
   matches: sfacgMatches,
   getChapterList: sfacgGetChapterList,
   getChapterContent: (html) => extractChapterContent(html),
+  getBookMeta: sfacgGetBookMeta,
 };
 
 const ADAPTERS: SiteAdapter[] = [sfacgAdapter];

@@ -6,6 +6,7 @@ import { getReadingProgress } from "@/lib/readerId";
 import { hanVietOf } from "@/lib/tokenizer";
 import { DeleteNovelButton } from "@/components/DeleteNovelButton";
 import { CompletionStatusToggle } from "@/components/CompletionStatusToggle";
+import { RefreshMetadataButton } from "@/components/RefreshMetadataButton";
 
 const COMPLETION_LABEL: Record<string, string> = {
   ONGOING: "Đang tiến hành",
@@ -102,7 +103,10 @@ export default async function NovelPage({
               Từ đã sửa của bạn
             </Link>
             {canDelete && (
-              <DeleteNovelButton novelSlug={novel.slug} novelTitle={novel.title} redirectTo="/" />
+              <>
+                <RefreshMetadataButton novelSlug={novel.slug} />
+                <DeleteNovelButton novelSlug={novel.slug} novelTitle={novel.title} redirectTo="/" />
+              </>
             )}
           </div>
         </div>

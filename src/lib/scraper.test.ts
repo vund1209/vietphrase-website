@@ -49,7 +49,19 @@ test("fetchChapterList follows the sfacg two-hop via its adapter, merging every 
   // book.sfacg.com adapter now reports 0 chapters on the landing page
   // (no .story-catalog there), which lets the hop reach the real TOC.
   const landingHtml = `
-    <html><head><title>Some Novel - SF轻小说</title></head><body>
+    <html><head>
+      <title>Some Novel - SF轻小说</title>
+      <meta name="description" content="SF轻小说提供Some Novel小说在线阅读">
+    </head><body>
+      <div class="d-summary">
+        <div class="summary-pic"><img src="/cover.jpg"></div>
+        <div class="summary-content">
+          <h1 class="title"><span class="text">真实书名<span class="tag blue">VIP</span></span></h1>
+          <div class="author-info"><div class="author-name"><span>真实作者</span></div></div>
+          <p class="introduce">真实简介第一句。
+真实简介第二句。</p>
+        </div>
+      </div>
       <div class="footer">
         <a href="https://www.sfacg.com/Extending/hire.html">招聘</a>
         <a href="https://www.sfacg.com/Extending/Announce.html">免责声明</a>
@@ -88,4 +100,13 @@ test("fetchChapterList follows the sfacg two-hop via its adapter, merging every 
   assert.equal(result.chapters.length, 2);
   assert.equal(result.chapters[0].title, "第一章 初入江湖");
   assert.equal(result.chapters[1].url, "https://book.sfacg.com/vip/c/999/");
+
+  // The adapter's markup-based metadata should win over the generic
+  // og:.../meta[name=description] extraction (see BookMeta's doc comment
+  // in src/lib/extract/types.ts) -- confirms the real title/synopsis/
+  // author/cover are used instead of the page's generic SEO blurb.
+  assert.equal(result.bookTitle, "真实书名");
+  assert.equal(result.description, "真实简介第一句。\n真实简介第二句。");
+  assert.equal(result.author, "真实作者");
+  assert.equal(result.coverImageUrl, "https://book.sfacg.com/cover.jpg");
 });
