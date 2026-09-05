@@ -116,22 +116,26 @@ the app exists.
 - **Done**: Prisma/Postgres wiring, tokenizer per-novel override
   support (`src/lib/overrides.ts` + `packages/tokenizer`'s `overrides`
   Map, see `docs/ARCHITECTURE.md` "Data split").
-- **Done, pending one setup step**: the reading library itself --
-  book-add-by-URL, chapter list, lazy scrape-on-view chapter page.
-  `src/lib/extract/` has the generic chapter-list/content extractors
-  (unit-tested against synthetic HTML, unvalidated against any real
-  site yet -- see `docs/ARCHITECTURE.md` "Scraping strategy"),
-  `src/app/api/novels/...` has the API routes, and `/`, `/novels/[slug]`,
-  `/novels/[slug]/chapters/[number]` have the UI. Verified via a dev
-  server smoke test with a fake local site standing in for a real one.
-  **One remaining step before this works end to end**: run
-  `npx prisma generate` again on the real machine to pick up the newly
-  added `binaryTargets` in `prisma/schema.prisma` (needed so the
-  generated client also works from the bridged Linux dev environment,
-  not just Windows) -- see `docs/ARCHITECTURE.md`'s "Scraping strategy"
-  implementation-status note for the full explanation.
-- Try the add-book flow against a real Chinese novel site once one is
-  available (sangtacviet.com was down during this build) and add a
-  per-site adapter if the generic extractor fails on it.
+- **Done**: the reading library itself -- book-add-by-URL, chapter
+  list, lazy scrape-on-view chapter page. `src/lib/extract/` has the
+  generic chapter-list/content extractors (26 unit tests against
+  synthetic HTML, plus structurally validated against two real sites --
+  book.sfacg.com and 69shuba.com -- see `docs/ARCHITECTURE.md` "Scraping
+  strategy"), `src/app/api/novels/...` has the API routes, and `/`,
+  `/novels/[slug]`, `/novels/[slug]/chapters/[number]` have the UI.
+  `npx prisma generate` has been re-run on the real machine with the
+  added `binaryTargets`, so the generated client works from both the
+  real Windows machine and the bridged Linux dev environment.
+- **Still open**: a true live end-to-end pass (add a real book, scrape a
+  real chapter, confirm it lands in Neon) hasn't been run yet -- the
+  bridged Linux dev environment can't reach Neon's Postgres endpoint at
+  all (network-egress allowlist blocks it, same as it blocks fetching
+  book.sfacg.com/69shuba.com pages directly), so this needs to be run on
+  the real machine directly: `npm run dev`, then add
+  `https://book.sfacg.com/Novel/530508/` or `https://www.69shuba.com/
+  book/90442.htm` (or any book/chapter URL) through the home page's
+  add-book form and confirm a chapter reads correctly. If either real
+  site's structure trips up the generic extractor, add a per-site
+  adapter (`src/lib/extract/adapters.ts`) for it.
 - Phase 2: implement the `rule.txt`-style grammar-reorder DSL for real
   readability gains beyond phrase substitution (see docs for details).

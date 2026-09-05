@@ -1,11 +1,15 @@
 // Generic chapter-content extraction: given a single chapter page, find
 // the text block with the highest density of CJK characters relative to
 // markup/link density (the same class of heuristic as Mozilla's
-// Readability). See docs/ARCHITECTURE.md "Scraping strategy" -- this is
-// heuristic and unvalidated against any real site yet (tested only
-// against synthetic fixtures; see chapterContent.test.ts).
+// Readability). See docs/ARCHITECTURE.md "Scraping strategy".
+//
+// Validated structurally against two real sites in addition to the
+// synthetic fixtures below: book.sfacg.com (clean <p>-per-paragraph
+// markup) and 69shuba.com (paragraphs separated by <br> with zero <p>
+// tags at all) -- see extractParagraphs() for the <br> handling this
+// second pattern requires.
 import * as cheerio from "cheerio";
-import type { ParentNode } from "domhandler";
+import type { Element, ParentNode } from "domhandler";
 import { cjkCount } from "./cjk.ts";
 import type { ExtractedChapterContent } from "./types";
 
@@ -61,28 +65,63 @@ export function extractChapterContent(html: string): ExtractedChapterContent {
     // Nothing scored (content isn't split into multiple paragraph-like
     // blocks at all) -- fall back to whichever single block element has
     // the most CJK characters in its full text, nested content included.
-    let fallbackText = "";
-    let fallbackScore = 0;
-    $(BLOCK_SELECTOR).each((_, el) => {
-      const text = $(el).text().trim();
-      const score = cjkCount(text);
-      if (score > fallbackScore) {
-        fallbackScore = score;
-        fallbackText = text;
-      }
-    });
-    return { title, text: normalizeText(fallbackText) };
+    const fallbackContainer = richestBlock($);
+    if (!fallbackContainer) return { title, text: "" };
+    const paragraphs = extractParagraphs($, fallbackContainer);
+    const text = paragraphs.length > 0 ? paragraphs.join("\n\n") : fallbackContainer.text().trim();
+    return { title, text: normalizeText(text) };
   }
 
   const container = $(bestNode);
-  const paragraphs: string[] = [];
-  container.find("p").each((_, p) => {
-    const t = $(p).text().trim();
-    if (t) paragraphs.push(t);
-  });
+  const paragraphs = extractParagraphs($, container);
   const text = paragraphs.length > 0 ? paragraphs.join("\n\n") : container.text().trim();
 
   return { title, text: normalizeText(text) };
+}
+
+// Whichever single block element has the most CJK characters in its
+// full text (nested content included) -- used when nothing scored via
+// the bubbling pass above, i.e. content isn't split into multiple
+// paragraph-like blocks at all.
+function richestBlock($: cheerio.CheerioAPI): cheerio.Cheerio<Element> | null {
+  let best: cheerio.Cheerio<Element> | null = null;
+  let bestScore = 0;
+  $(BLOCK_SELECTOR).each((_, el) => {
+    const text = $(el).text().trim();
+    const score = cjkCount(text);
+    if (score > bestScore) {
+      bestScore = score;
+      best = $(el);
+    }
+  });
+  return best;
+}
+
+// Extract paragraph strings from a winning container. Prefers real <p>
+// children (clean markup, e.g. sfacg.com). Falls back to splitting on
+// <br> tags when there are no <p> children at all but there are <br>s
+// (plain-text-style markup, e.g. 69shuba.com) -- .text() alone would
+// ignore <br> and collapse every paragraph into one unbroken blob, so
+// each <br> is converted to a newline before reading the text.
+function extractParagraphs($: cheerio.CheerioAPI, container: cheerio.Cheerio<ParentNode>): string[] {
+  const pParagraphs: string[] = [];
+  container.find("p").each((_, p) => {
+    const t = $(p).text().trim();
+    if (t) pParagraphs.push(t);
+  });
+  if (pParagraphs.length > 0) return pParagraphs;
+
+  if (container.find("br").length > 0) {
+    const clone = container.clone();
+    clone.find("br").replaceWith("\n");
+    return clone
+      .text()
+      .split(/\n+/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+  }
+
+  return [];
 }
 
 function extractTitle($: cheerio.CheerioAPI): string | null {

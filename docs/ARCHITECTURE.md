@@ -75,26 +75,63 @@ pastes. See "Translate page: API design" below for the concrete contract.
 
 ## Scraping strategy: generic extraction, adapters as a fallback
 
-**Implementation status (2026-09-05): built, unit-tested, not yet
-verified end-to-end against the live Neon database.** The generic
-extractors (`src/lib/extract/chapterList.ts`, `chapterContent.ts`),
-the scraper entry points (`src/lib/scraper.ts`), the Novel/Chapter API
-routes (`src/app/api/novels/...`), and the reading UI (home page's
-add-by-URL form + library list, `/novels/[slug]`, `/novels/[slug]/
-chapters/[number]`) all exist and pass `npm test` (synthetic HTML
-fixtures) plus a synthetic-site dev-server smoke test (fake local HTTP
-server standing in for a Chinese novel site). What that smoke test
-could NOT verify: Prisma Client, as generated on the real Windows
-machine, has no Linux query engine binary, so every Postgres-touching
-route 500s when run through the bridged Linux dev environment. Fixed by
-adding `binaryTargets = ["native", "debian-openssl-3.0.x"]` to
-`prisma/schema.prisma`'s generator block -- purely additive, doesn't
-change the Windows dev flow -- but it needs one `npx prisma generate`
-run on the real machine to actually download that binary before a true
-live end-to-end pass (real Neon writes, not just compilation) can
-happen from either environment. Still fully unvalidated against any
-real Chinese novel site, per the "Open problem" section below and the
-user's explicit choice to proceed generically rather than wait for one.
+**Implementation status (2026-09-05): built, unit-tested, structurally
+validated against two real sites, still not verified end-to-end against
+the live Neon database.** The generic extractors
+(`src/lib/extract/chapterList.ts`, `chapterContent.ts`), the scraper
+entry points (`src/lib/scraper.ts`), the Novel/Chapter API routes
+(`src/app/api/novels/...`), and the reading UI (home page's add-by-URL
+form + library list, `/novels/[slug]`, `/novels/[slug]/chapters/
+[number]`) all exist and pass `npm test` (synthetic HTML fixtures, 26
+tests) plus a synthetic-site dev-server smoke test (fake local HTTP
+server standing in for a Chinese novel site). Prisma Client, as
+generated on the real Windows machine, had no Linux query engine
+binary, so every Postgres-touching route 500'd when run through the
+bridged Linux dev environment; fixed by adding
+`binaryTargets = ["native", "debian-openssl-3.0.x"]` to
+`prisma/schema.prisma`'s generator block and regenerating on the real
+machine.
+
+Research against two real, structurally different sites --
+book.sfacg.com (the Chinese source behind the sangtacviet.com mirror the
+user pointed at) and 69shuba.com -- surfaced two real-world patterns the
+generic extractors didn't originally handle, both now fixed:
+
+- **Two-hop book pages.** Neither site's natural "paste this book URL"
+  landing page contains the chapter list -- it links to a separate TOC
+  page one hop away (sfacg: `/Novel/<id>/MainIndex/` via a "点击阅读"
+  link; 69shuba: `/book/<id>/` via a "开始阅读" link from
+  `/book/<id>.htm`), and neither link's text reliably contains an
+  obvious "目录" keyword. `fetchChapterList()` in `src/lib/scraper.ts`
+  now falls back to `findTocLink()`: if the given URL yields zero
+  chapters, it follows the first same-origin link matching a broader set
+  of TOC-like href/text signals and retries extraction there once (one
+  hop only, to avoid loops).
+- **`<br>`-separated content, no `<p>` tags at all.** sfacg.com uses
+  clean `<p>`-per-paragraph markup, but 69shuba.com's chapter body
+  (`DIV.txtnav`) separates paragraphs with `<br>` and has zero `<p>`
+  children -- `.text()` alone ignores `<br>` and would collapse every
+  paragraph into one unbroken blob. `extractParagraphs()` in
+  `src/lib/extract/chapterContent.ts` now falls back to converting
+  `<br>` elements to newlines before reading text when a winning
+  container has no `<p>` children.
+- The densest-cluster chapter-list algorithm itself needed no changes:
+  it correctly found book.sfacg.com's 1207 real chapters (effectively
+  immediate `<li>` wrapping) and 69shuba.com's 569 real chapters
+  (requiring the ancestor-depth-2 escalation the algorithm already had)
+  once pointed at each site's real TOC page.
+
+What's still unverified: a true live end-to-end pass (add a real book,
+scrape a real chapter, confirm the row lands in Neon) has not been run,
+against either the synthetic fixture or the two real sites. The bridged
+Linux dev environment this assistant runs in cannot reach Neon's
+Postgres endpoint at all -- direct connections are blocked by the same
+network-egress allowlist that blocks fetching book.sfacg.com/69shuba.com
+pages directly (confirmed: the sandbox's HTTP CONNECT proxy returns `403
+blocked-by-allowlist` for the Neon host, same as it does for those
+sites) -- so this needs to be run on the real Windows machine directly,
+outside the bridge, or from an environment whose egress allowlist
+includes the Neon host.
 
 Chinese novel sites vary too much to hand-write a parser per site up
 front, and there's no fixed list of target sites yet. Start with a
@@ -299,15 +336,22 @@ examples in the root `.env.example`. The real values go in a local `.env`
 
 If someone pastes a single chapter URL for a book that isn't in the
 system yet (the "surfing" entry point), the system needs to find the
-book's full chapter list, not just translate that one page. Real sites
-usually link back to a table-of-contents page from a chapter page (a
-"目录" / "章节目录" / "directory" link), or use a predictable URL
-structure (`/book/123/456.html` where `/book/123/` is the TOC) — but
-which of these applies is site-specific and unvalidated. Not solved yet;
-needs real target site examples to design against properly, not
-guesswork. If no parent book can be found, the fallback is presumably to
-translate just that one chapter as an orphaned entry — acceptable, but
-not designed in detail yet.
+book's full chapter list, not just translate that one page. This is
+distinct from (but related to) the two-hop book-landing-page pattern
+found on book.sfacg.com/69shuba.com and already handled by
+`findTocLink()` (see "Scraping strategy" above) -- that fallback starts
+from a book/landing URL that lacks a chapter list, not from an arbitrary
+single chapter URL. Real sites usually link back to a table-of-contents
+page from a chapter page too (a "目录" / "章节目录" / "directory" link,
+or the same broader signal set `findTocLink()` already checks for), or
+use a predictable URL structure (`/book/123/456.html` where `/book/123/`
+is the TOC) — but `findTocLink()` is not yet wired up for this
+single-chapter-URL entry point specifically, only for the add-a-book
+flow. Extending it there is likely straightforward given the same
+mechanism already exists, but unconfirmed against a real "paste a bare
+chapter URL" case. If no parent book can be found, the fallback is
+presumably to translate just that one chapter as an orphaned entry —
+acceptable, but not designed in detail yet.
 
 ## What's deliberately out of scope for v1
 

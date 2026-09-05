@@ -1,15 +1,15 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
-
-// Library/reader pages show live, per-request data (novels/chapters get
-// added and translated at runtime) -- never statically prerender these.
-export const dynamic = "force-dynamic";
   ChapterNotFoundError,
   ScrapeFailedError,
   getNovelBySlug,
   getOrTranslateChapter,
 } from "@/lib/novels";
+
+// Library/reader pages show live, per-request data (novels/chapters get
+// added and translated at runtime) -- never statically prerender these.
+export const dynamic = "force-dynamic";
 
 export default async function ChapterPage({
   params,

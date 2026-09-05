@@ -68,3 +68,29 @@ test("falls back to the single richest block when content isn't split into <p> t
   const result = extractChapterContent(html);
   assert.match(result.text, /这是一整段没有分段的正文内容/);
 });
+
+test("splits <br>-separated paragraphs (no <p> tags at all) into distinct lines", () => {
+  // Mirrors real-world markup seen on some CJK novel sites (e.g.
+  // 69shuba.com's DIV.txtnav), which uses <br> between paragraphs
+  // instead of wrapping each one in a <p>.
+  const html = `
+    <html><head><title>第三章 秘境探险</title></head><body>
+      <div class="wrapper">
+        <div class="txtnav">
+          第一段：主角踏入秘境，四周弥漫着诡异的雾气，让人不寒而栗。<br><br>
+          第二段：他握紧手中的长剑，缓缓向密林深处走去，脚步声在寂静中格外清晰。<br><br>
+          第三段：忽然，一道黑影从树后闪过，主角瞬间进入戒备状态，气氛骤然紧张起来。
+        </div>
+      </div>
+    </body></html>
+  `;
+  const result = extractChapterContent(html);
+  assert.match(result.text, /第一段：主角踏入秘境/);
+  assert.match(result.text, /第二段：他握紧手中的长剑/);
+  assert.match(result.text, /第三段：忽然，一道黑影从树后闪过/);
+  const lines = result.text.split("\n").filter(Boolean);
+  assert.ok(
+    lines.length >= 3,
+    `expected at least 3 lines, got ${lines.length}: ${JSON.stringify(lines)}`
+  );
+});
