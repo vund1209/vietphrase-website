@@ -114,14 +114,25 @@ common rendering first, but this isn't verified), or make it
 context-sensitive later. This needs a decision before the tokenizer ships
 a v1, even a naive one (take-first is the obvious placeholder).
 
-## Validation: a working prototype exists
+## Validation, and the production module
 
 `prototype/tokenizer.mjs` is a zero-dependency Node script (uses the
 built-in, experimental `node:sqlite`) implementing the algorithm above
-directly against `dictionary_seed.db`. It's a throwaway validation tool,
-not the production tokenizer — the point was to find out whether the
-merged dictionary actually produces usable output before building the
-real app around it. Run it with `node prototype/tokenizer.mjs`.
+directly against `dictionary_seed.db`. It was a throwaway validation
+tool — the point was to find out whether the merged dictionary actually
+produces usable output before building the real app around it — and it's
+kept only as the historical record of that validation run. Run it with
+`node prototype/tokenizer.mjs`.
+
+**`packages/tokenizer` is the production module**, promoted from that
+prototype once it proved out. Same algorithm, same data source for now
+(interim: reads `dictionary_seed.db` directly; will move to Prisma/
+Postgres queries once that exists, without changing its `tokenize()`
+contract), but with proper types (JSDoc), a pluggable alternate-
+translation selector, per-novel scoping support, and a real test suite
+(`npm test` in that package — 10 tests: isolated unit tests against a
+synthetic database, plus real-data regression spot-checks). This is what
+future app code should import; the prototype is not meant to be reused.
 
 Result against a 102-character synthetic test paragraph (mixing known
 names, common vocabulary, pronouns, and a date): 32 word matches, 2 name

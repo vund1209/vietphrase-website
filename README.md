@@ -27,8 +27,12 @@ vietphrase-website/
 ├── docs/
 │   ├── VIETPHRASE_CORE.md              # how the translation engine works (algorithm, open decisions)
 │   └── DICTIONARY_SOURCES.md           # full source evaluation + build report
+├── packages/
+│   └── tokenizer/                      # production tokenizer module (tested, no npm deps)
 ├── prisma/
 │   └── schema.prisma                   # live-app Postgres schema (forward design, no app yet)
+├── prototype/
+│   └── tokenizer.mjs                   # superseded validation script, kept for history only
 ├── ref/                                 # vendor reference clones (gitignored, see below)
 └── README.md
 ```
@@ -60,13 +64,19 @@ the app exists.
 
 ## Next up
 
+- `packages/tokenizer` has the production longest-match tokenizer, tested
+  (`npm test`, 10 passing) and validated against real data — see
+  `docs/VIETPHRASE_CORE.md` for the algorithm spec and its "Validation"
+  section for how it got here. Not wired into any app yet.
 - `prisma/schema.prisma` has the live-app Postgres schema drafted (words /
   names / pronouns / hanviet_fallback / scrape_blacklist + novels, with
   per-novel name scoping) — see the comments in that file for the design
   rationale. Not yet wired to a running app or migrated anywhere.
-- Scaffold the Next.js app (tokenizer engine, reader UI, dictionary editor,
-  scraper) per the architecture discussed — not started yet. Part of that
-  work is a one-time import script loading `dictionary_seed.db` into the
-  Postgres schema above (via the reserved "global" Novel row for names).
+- Scaffold the Next.js app (reader UI, dictionary editor, scraper) per the
+  architecture discussed — not started yet. Part of that work is a
+  one-time import script loading `dictionary_seed.db` into the Postgres
+  schema above (via the reserved "global" Novel row for names), after
+  which `packages/tokenizer` should be pointed at Prisma instead of
+  SQLite directly.
 - Phase 2: implement the `rule.txt`-style grammar-reorder DSL for real
   readability gains beyond phrase substitution (see docs for details).
