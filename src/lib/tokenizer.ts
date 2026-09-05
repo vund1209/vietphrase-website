@@ -36,6 +36,51 @@ export interface DisplayToken {
    * docs/ARCHITECTURE.md "User management and per-word overrides".
    */
   hanViet: string;
+  /**
+   * The capitalization style behind this token's forced capitalization,
+   * if any -- "NONE" unless this token came from a Name/UserWordOverride
+   * entry with one set. Exposed so the span editor can prefill the
+   * current style when re-opening an existing entry for editing.
+   */
+  capStyle: CapStyle;
+}
+
+// Deliberately a plain string union, not Prisma's generated NameCapStyle
+// enum -- this file (and packages/tokenizer) stay decoupled from
+// Postgres/Prisma; the caller (src/lib/overrides.ts) is responsible for
+// mapping its Postgres-shaped rows into this shape.
+export type CapStyle = "NONE" | "FIRST_LETTER" | "ALL_WORDS";
+
+function capitalizeFirstLetter(text: string): string {
+  return text.replace(/^([^\p{L}]*)(\p{L})/u, (_, lead: string, letter: string) => lead + letter.toUpperCase());
+}
+
+// A dictionary entry's forced display style, independent of sentence
+// position -- e.g. a person's full name should always read fully
+// capitalized ("Trương Vũ Cách"), not just when it happens to start a
+// sentence. See prisma/schema.prisma's NameCapStyle enum.
+function applyCapStyle(text: string, style: CapStyle): string {
+  if (style === "ALL_WORDS") {
+    return text.replace(/(^|\s)(\p{L})/gu, (_, sep: string, letter: string) => sep + letter.toUpperCase());
+  }
+  if (style === "FIRST_LETTER") {
+    return capitalizeFirstLetter(text);
+  }
+  return text;
+}
+
+// Only tokens matched from the `overrides` map (per-novel Name rows or a
+// reader's personal UserWordOverride rows) can carry a capStyle --
+// packages/tokenizer's tokenizer.mjs tags every overrides-map hit
+// "name" regardless of which Postgres table it came from, so this
+// uniformly covers both the shared and personal dictionaries.
+function applyCapStyles(line: DisplayToken[], capStyles?: Map<string, CapStyle>): DisplayToken[] {
+  return line.map((token) => {
+    const style: CapStyle =
+      token.source === "name" ? capStyles?.get(token.chinese) ?? "NONE" : "NONE";
+    if (style === "NONE") return token.capStyle === "NONE" ? token : { ...token, capStyle: style };
+    return { ...token, vietnamese: applyCapStyle(token.vietnamese, style), capStyle: style };
+  });
 }
 
 // The dictionary stores translations lowercase (it has no notion of
@@ -46,10 +91,6 @@ export interface DisplayToken {
 // entries for it), so this only ever touches token boundaries, never
 // splits a word.
 const SENTENCE_END_RE = /^[.!?。！？]+$/;
-
-function capitalizeFirstLetter(text: string): string {
-  return text.replace(/^([^\p{L}]*)(\p{L})/u, (_, lead: string, letter: string) => lead + letter.toUpperCase());
-}
 
 function applySentenceCapitalization(line: DisplayToken[]): DisplayToken[] {
   let capitalizeNext = true;
@@ -78,30 +119,39 @@ function applySentenceCapitalization(line: DisplayToken[]): DisplayToken[] {
  * personal override for it -- see docs/ARCHITECTURE.md "User management
  * and per-word overrides".
  */
-export function tokenizeLines(text: string, overrides?: Map<string, string>): DisplayToken[][] {
+export function tokenizeLines(
+  text: string,
+  overrides?: Map<string, string>,
+  capStyles?: Map<string, CapStyle>
+): DisplayToken[][] {
   const tok = getTokenizer();
   return text.split("\n").map((line) => {
     if (!line.trim()) return [];
-    const tokens = tok.tokenize(line, { overrides }).map((t) => ({
+    const tokens: DisplayToken[] = tok.tokenize(line, { overrides }).map((t) => ({
       chinese: t.chinese,
       vietnamese: t.vietnamese,
       rawVietnamese: t.rawVietnamese,
       source: t.source,
       hanViet: t.hanViet,
+      capStyle: "NONE",
     }));
-    return applySentenceCapitalization(tokens);
+    return applySentenceCapitalization(applyCapStyles(tokens, capStyles));
   });
 }
 
 /**
  * Flat-string translation, built from tokenizeLines -- used where only
  * plain text is needed: the standalone /translate page (no novel
- * context) and the cached shared Chapter.translatedText column (the
- * fast path served to readers with no personal overrides for the
- * novel).
+ * context) and a chapter's anonymous-reader render (see
+ * src/lib/novels.ts's getOrTranslateChapter -- computed fresh per
+ * request, never cached).
  */
-export function translateText(text: string, overrides?: Map<string, string>): string {
-  return tokenizeLines(text, overrides)
+export function translateText(
+  text: string,
+  overrides?: Map<string, string>,
+  capStyles?: Map<string, CapStyle>
+): string {
+  return tokenizeLines(text, overrides, capStyles)
     .map((line) => line.map((t) => t.vietnamese).join(" "))
     .join("\n");
 }

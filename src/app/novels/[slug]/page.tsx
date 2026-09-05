@@ -17,9 +17,8 @@ const COMPLETION_LABEL: Record<string, string> = {
 export const dynamic = "force-dynamic";
 
 const STATUS_LABEL: Record<string, string> = {
-  PENDING: "Chưa dịch",
-  SCRAPED: "Đã lấy nội dung",
-  TRANSLATED: "Đã dịch",
+  PENDING: "Chưa tải",
+  SCRAPED: "Sẵn sàng",
   ERROR: "Lỗi",
 };
 

@@ -74,7 +74,7 @@ export default async function ChapterPage({
         />
       ) : (
         <article className="prose-reading text-lg">
-          {(result.chapter.translatedText ?? "").split("\n").map((line, i) => (
+          {(result.translatedText ?? "").split("\n").map((line, i) => (
             <p key={i}>{line || " "}</p>
           ))}
         </article>

@@ -107,10 +107,15 @@ enum NovelStatus {
 }
 
 /// One chapter of a Novel. Rows are created for every chapter as soon as
-/// the chapter list is fetched (status PENDING), but `rawText` /
-/// `translatedText` stay null until that specific chapter is scraped and
-/// translated -- lazily, on first view. See docs/ARCHITECTURE.md
-/// "Scrape timing" for why this is lazy rather than eager.
+/// the chapter list is fetched (status PENDING), but `rawText` stays
+/// null until that specific chapter is scraped -- lazily, on first view.
+/// See docs/ARCHITECTURE.md "Scrape timing" for why this is lazy rather
+/// than eager. There is deliberately no stored translated copy: VietPhrase
+/// translation is a render-time layer over `rawText` (see
+/// src/lib/novels.ts's getOrTranslateChapter), not a separately cached
+/// value -- this is the actual VietPhrase-tool model, and it means a
+/// dictionary change takes effect on the next view with no invalidation
+/// step at all.
 model Chapter {
   id             Int           @id @default(autoincrement())
   novelId        Int
@@ -125,10 +130,8 @@ model Chapter {
   sourceChapterId String?
   sourceUrl      String
   rawText        String? // Chinese; null until first scraped
-  translatedText String? // Vietnamese; null until first translated
   status         ChapterStatus @default(PENDING)
   scrapedAt      DateTime?
-  translatedAt   DateTime?
   createdAt      DateTime      @default(now())
 
   @@unique([novelId, chapterNumber])
@@ -138,9 +141,8 @@ model Chapter {
 
 enum ChapterStatus {
   PENDING // known from the chapter list, not yet scraped
-  SCRAPED // raw text fetched, not yet translated
-  TRANSLATED // ready to read
-  ERROR // scrape or translation failed
+  SCRAPED // raw text fetched -- ready to render (translation is always live)
+  ERROR // scrape failed
 }
 
 /// Per-novel proper-noun overrides -- the dictionary users actually
@@ -152,6 +154,11 @@ model Name {
   id             Int      @id @default(autoincrement())
   chineseText    String
   vietnameseText String
+  // How this entry's vietnameseText renders regardless of sentence
+  // position -- e.g. a person's full name should always read fully
+  // capitalized, not just when it happens to start a sentence. See
+  // src/lib/tokenizer.ts's applyCapStyle.
+  capStyle       NameCapStyle @default(NONE)
   phraseLength   Int
   novelId        Int
   novel          Novel    @relation(fields: [novelId], references: [id], onDelete: Cascade)
@@ -173,6 +180,12 @@ model Name {
   @@index([phraseLength])
   @@index([novelId])
   @@map("names")
+}
+
+enum NameCapStyle {
+  NONE // no forced capitalization -- sentence-position rules still apply
+  FIRST_LETTER // capitalize just the first letter of the whole phrase
+  ALL_WORDS // capitalize the first letter of every word (full proper names)
 }
 
 /// A registered reader/editor account. Credentials auth only (email +
@@ -227,6 +240,8 @@ model UserWordOverride {
   novel          Novel    @relation(fields: [novelId], references: [id], onDelete: Cascade)
   chineseText    String
   vietnameseText String
+  // See Name.capStyle above -- same meaning, personal-scope copy.
+  capStyle       NameCapStyle @default(NONE)
   phraseLength   Int
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt

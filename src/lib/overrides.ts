@@ -1,8 +1,10 @@
 // Fetches override maps from Postgres and builds the in-memory Map
-// shape packages/tokenizer's tokenize() expects, per docs/ARCHITECTURE.md
-// "Data split": one query per chapter translation, never one query per
-// candidate substring.
+// shapes packages/tokenizer's tokenize() (translations) and
+// src/lib/tokenizer.ts's capitalization pass (capStyles) expect, per
+// docs/ARCHITECTURE.md "Data split": one query per chapter translation,
+// never one query per candidate substring.
 import { prisma } from "@/lib/prisma";
+import type { NameCapStyle } from "@prisma/client";
 
 // Bounds for a user-submitted override's chineseText/vietnameseText,
 // shared by both write routes (personal save and shared-dictionary
@@ -13,6 +15,8 @@ import { prisma } from "@/lib/prisma";
 export const MAX_OVERRIDE_PHRASE_LENGTH = 60;
 export const MAX_TRANSLATION_LENGTH = 200;
 export const MAX_TRANSLATION_SEGMENTS = 8;
+
+const CAP_STYLES: NameCapStyle[] = ["NONE", "FIRST_LETTER", "ALL_WORDS"];
 
 export function validateOverridePair(
   chineseText: string,
@@ -36,13 +40,31 @@ export function validateOverridePair(
   return null;
 }
 
+export function validateCapStyle(value: unknown): value is NameCapStyle {
+  return CAP_STYLES.includes(value as NameCapStyle);
+}
+
+export interface OverrideLayer {
+  /** chineseText -> raw vietnameseText ("a/b/c"), what the tokenizer's overrides param expects. */
+  translations: Map<string, string>;
+  /** chineseText -> capitalization style, for src/lib/tokenizer.ts's applyCapStyle. */
+  capStyles: Map<string, NameCapStyle>;
+}
+
+function toOverrideLayer(rows: { chineseText: string; vietnameseText: string; capStyle: NameCapStyle }[]): OverrideLayer {
+  return {
+    translations: new Map(rows.map((r) => [r.chineseText, r.vietnameseText])),
+    capStyles: new Map(rows.map((r) => [r.chineseText, r.capStyle])),
+  };
+}
+
 /** The shared, editor-curated per-novel dictionary every reader sees. */
-export async function loadNovelOverrides(novelId: number): Promise<Map<string, string>> {
+export async function loadNovelOverrides(novelId: number): Promise<OverrideLayer> {
   const rows = await prisma.name.findMany({
     where: { novelId, isActive: true },
-    select: { chineseText: true, vietnameseText: true },
+    select: { chineseText: true, vietnameseText: true, capStyle: true },
   });
-  return new Map(rows.map((r) => [r.chineseText, r.vietnameseText]));
+  return toOverrideLayer(rows);
 }
 
 /**
@@ -54,12 +76,12 @@ export async function loadNovelOverrides(novelId: number): Promise<Map<string, s
 export async function loadUserWordOverrides(
   novelId: number,
   userId: number
-): Promise<Map<string, string>> {
+): Promise<OverrideLayer> {
   const rows = await prisma.userWordOverride.findMany({
     where: { novelId, userId },
-    select: { chineseText: true, vietnameseText: true },
+    select: { chineseText: true, vietnameseText: true, capStyle: true },
   });
-  return new Map(rows.map((r) => [r.chineseText, r.vietnameseText]));
+  return toOverrideLayer(rows);
 }
 
 /**
@@ -72,10 +94,13 @@ export async function loadUserWordOverrides(
 export async function loadOverridesForUser(
   novelId: number,
   userId: number
-): Promise<Map<string, string>> {
+): Promise<OverrideLayer> {
   const [shared, personal] = await Promise.all([
     loadNovelOverrides(novelId),
     loadUserWordOverrides(novelId, userId),
   ]);
-  return new Map([...shared, ...personal]);
+  return {
+    translations: new Map([...shared.translations, ...personal.translations]),
+    capStyles: new Map([...shared.capStyles, ...personal.capStyles]),
+  };
 }

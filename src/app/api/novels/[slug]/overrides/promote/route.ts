@@ -7,7 +7,7 @@
 import { auth, isEditorOrAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { translateText } from "@/lib/tokenizer";
-import { loadNovelOverrides, validateOverridePair } from "@/lib/overrides";
+import { loadNovelOverrides, validateOverridePair, validateCapStyle } from "@/lib/overrides";
 
 export async function POST(
   request: Request,
@@ -39,6 +39,10 @@ export async function POST(
   if (validationError) {
     return Response.json({ error: validationError }, { status: 400 });
   }
+  const capStyle = body?.capStyle ?? "NONE";
+  if (!validateCapStyle(capStyle)) {
+    return Response.json({ error: "Invalid capStyle" }, { status: 400 });
+  }
 
   const editorId = Number(session.user.id);
   const name = await prisma.name.upsert({
@@ -46,6 +50,7 @@ export async function POST(
     create: {
       chineseText,
       vietnameseText,
+      capStyle,
       novelId: novel.id,
       phraseLength: chineseText.length,
       source: "user_promoted",
@@ -53,33 +58,32 @@ export async function POST(
     },
     update: {
       vietnameseText,
+      capStyle,
       isActive: true,
       promotedByUserId: editorId,
     },
   });
 
-  // The shared dictionary just changed -- every reader's cached
-  // translatedText for this novel was computed against the old
-  // dictionary, so it's stale. Clear it (rawText is untouched and still
-  // valid) so the next view of each chapter re-translates lazily
-  // instead of serving the outdated cache -- see docs/ARCHITECTURE.md
-  // "Scrape timing".
-  await prisma.chapter.updateMany({
-    where: { novelId: novel.id, status: "TRANSLATED" },
-    data: { translatedText: null, status: "SCRAPED" },
-  });
-
   // Titles are short strings -- cheap to redo synchronously here too, so
   // they stay in sync with the dictionary rather than going stale until
   // some other trigger re-translates them (there isn't one otherwise).
+  // Chapter *body* text needs no such step: it's rendered live from
+  // rawText on every view (see src/lib/novels.ts), so it already reflects
+  // this change on the very next request.
   const freshOverrides = await loadNovelOverrides(novel.id);
   if (novel.originalTitle || novel.originalDescription) {
     await prisma.novel.update({
       where: { id: novel.id },
       data: {
-        ...(novel.originalTitle && { title: translateText(novel.originalTitle, freshOverrides) }),
+        ...(novel.originalTitle && {
+          title: translateText(novel.originalTitle, freshOverrides.translations, freshOverrides.capStyles),
+        }),
         ...(novel.originalDescription && {
-          description: translateText(novel.originalDescription, freshOverrides),
+          description: translateText(
+            novel.originalDescription,
+            freshOverrides.translations,
+            freshOverrides.capStyles
+          ),
         }),
       },
     });
@@ -92,7 +96,13 @@ export async function POST(
     chaptersWithOriginalTitle.map((c) =>
       prisma.chapter.update({
         where: { id: c.id },
-        data: { title: translateText(c.originalTitle as string, freshOverrides) },
+        data: {
+          title: translateText(
+            c.originalTitle as string,
+            freshOverrides.translations,
+            freshOverrides.capStyles
+          ),
+        },
       })
     )
   );

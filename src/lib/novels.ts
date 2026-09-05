@@ -1,8 +1,13 @@
-// Shared data-access + lazy scrape/translate logic for the reading
-// library, used by both the API routes (src/app/api/novels/...) and the
-// reader page's server component directly, so the two don't duplicate
-// this logic. See docs/ARCHITECTURE.md "Scrape timing: lazy, on first
-// view" and "User management and per-word overrides".
+// Shared data-access + lazy scrape/render logic for the reading library,
+// used by both the API routes (src/app/api/novels/...) and the reader
+// page's server component directly, so the two don't duplicate this
+// logic. See docs/ARCHITECTURE.md "Scrape timing: lazy, on first view"
+// and "User management and per-word overrides".
+//
+// VietPhrase translation is a render-time layer over Chapter.rawText,
+// not a separately cached value -- see prisma/schema.prisma's Chapter
+// doc comment. That means there's nothing to invalidate when a
+// dictionary entry changes; the next view just renders differently.
 import type { Chapter, Novel } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { fetchChapterContent } from "@/lib/scraper";
@@ -28,12 +33,14 @@ export interface ChapterResult {
   chapter: Chapter;
   novel: Pick<Novel, "slug" | "title">;
   /**
+   * Flat rendered text for an anonymous reader -- computed fresh from
+   * `chapter.rawText` on every request, never stored.
+   */
+  translatedText?: string;
+  /**
    * Per-word breakdown for the interactive reader, populated only for a
    * signed-in reader (see docs/ARCHITECTURE.md "User management and
-   * per-word overrides"). Anonymous readers, and any reader with no
-   * personal overrides for this novel, get the fast cached
-   * `chapter.translatedText` path with no per-token recompute -- `tokens`
-   * stays undefined and the caller renders the plain cached text.
+   * per-word overrides"), also computed fresh each request.
    */
   tokens?: DisplayToken[][];
 }
@@ -53,33 +60,9 @@ export async function getOrTranslateChapter(
 
   const novelSummary = { slug: novel.slug, title: novel.title };
 
-  // Cache hit: already scraped and translated on a previous view. The
-  // shared translatedText column is the same for every reader, so an
-  // anonymous reader (or one with no personal overrides) can be served
-  // it directly with no recompute.
-  if (chapter.status === "TRANSLATED" && chapter.translatedText) {
-    if (userId === undefined) {
-      return { chapter, novel: novelSummary };
-    }
-    if (!chapter.rawText) {
-      // Shouldn't happen -- rawText is always saved alongside
-      // translatedText below -- but fall back to the shared text rather
-      // than throw if some row predates that invariant.
-      return { chapter, novel: novelSummary };
-    }
-    const tokens = await tokenizeForReader(novel.id, userId, chapter.rawText);
-    return { chapter, novel: novelSummary, tokens };
-  }
-
-  // Reuse existing raw text if we already have it -- e.g. after a
-  // dictionary promotion resets translatedText/status to force a
-  // re-translate (see .../overrides/promote/route.ts's comment: "rawText
-  // is untouched and still valid"). Only scrape when there's truly no
-  // raw text yet, so a dictionary change never re-hits the source site.
-  let rawText: string;
-  if (chapter.rawText) {
-    rawText = chapter.rawText;
-  } else {
+  let rawText = chapter.rawText;
+  let updated = chapter;
+  if (!rawText) {
     try {
       const fetched = await fetchChapterContent(chapter.sourceUrl);
       rawText = fetched.rawText;
@@ -89,24 +72,16 @@ export async function getOrTranslateChapter(
         err instanceof Error ? err.message : "Failed to scrape chapter"
       );
     }
+    updated = await prisma.chapter.update({
+      where: { id: chapter.id },
+      data: { rawText, status: "SCRAPED", scrapedAt: new Date() },
+    });
   }
 
-  const sharedOverrides = await loadNovelOverrides(novel.id);
-  const translatedText = translateText(rawText, sharedOverrides);
-
-  const updated = await prisma.chapter.update({
-    where: { id: chapter.id },
-    data: {
-      rawText,
-      translatedText,
-      status: "TRANSLATED",
-      scrapedAt: chapter.scrapedAt ?? new Date(),
-      translatedAt: new Date(),
-    },
-  });
-
   if (userId === undefined) {
-    return { chapter: updated, novel: novelSummary };
+    const { translations, capStyles } = await loadNovelOverrides(novel.id);
+    const translatedText = translateText(rawText, translations, capStyles);
+    return { chapter: updated, novel: novelSummary, translatedText };
   }
   const tokens = await tokenizeForReader(novel.id, userId, rawText);
   return { chapter: updated, novel: novelSummary, tokens };
@@ -114,19 +89,16 @@ export async function getOrTranslateChapter(
 
 /**
  * Re-tokenizes a chapter's raw text with this specific reader's override
- * layer (shared dictionary + their own private overrides). Deliberately
- * NOT cached anywhere: the shared Chapter.translatedText column stays
- * the one cached, editor-curated version everyone else gets; a signed-in
- * reader with personal overrides always gets a fresh per-view render
- * instead, which is cheap (an in-memory SQLite tokenize pass over text
- * already in hand, not a re-scrape) -- see docs/ARCHITECTURE.md "User
- * management and per-word overrides".
+ * layer (shared dictionary + their own private overrides). Cheap: an
+ * in-memory SQLite tokenize pass over text already in hand, not a
+ * re-scrape -- see docs/ARCHITECTURE.md "User management and per-word
+ * overrides".
  */
 async function tokenizeForReader(
   novelId: number,
   userId: number,
   rawText: string
 ): Promise<DisplayToken[][]> {
-  const overrides = await loadOverridesForUser(novelId, userId);
-  return tokenizeLines(rawText, overrides);
+  const { translations, capStyles } = await loadOverridesForUser(novelId, userId);
+  return tokenizeLines(rawText, translations, capStyles);
 }

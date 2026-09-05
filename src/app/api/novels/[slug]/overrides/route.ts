@@ -5,7 +5,7 @@
 // ./promote/route.ts).
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { validateOverridePair } from "@/lib/overrides";
+import { validateOverridePair, validateCapStyle } from "@/lib/overrides";
 
 async function resolveNovelId(slug: string): Promise<number | null> {
   const novel = await prisma.novel.findUnique({ where: { slug }, select: { id: true } });
@@ -30,7 +30,7 @@ export async function GET(
   const overrides = await prisma.userWordOverride.findMany({
     where: { novelId, userId: Number(session.user.id) },
     orderBy: { updatedAt: "desc" },
-    select: { id: true, chineseText: true, vietnameseText: true, updatedAt: true },
+    select: { id: true, chineseText: true, vietnameseText: true, capStyle: true, updatedAt: true },
   });
 
   return Response.json({ overrides });
@@ -60,6 +60,10 @@ export async function POST(
   if (validationError) {
     return Response.json({ error: validationError }, { status: 400 });
   }
+  const capStyle = body?.capStyle ?? "NONE";
+  if (!validateCapStyle(capStyle)) {
+    return Response.json({ error: "Invalid capStyle" }, { status: 400 });
+  }
 
   const userId = Number(session.user.id);
   const override = await prisma.userWordOverride.upsert({
@@ -69,9 +73,10 @@ export async function POST(
       novelId,
       chineseText,
       vietnameseText,
+      capStyle,
       phraseLength: chineseText.length,
     },
-    update: { vietnameseText, phraseLength: chineseText.length },
+    update: { vietnameseText, capStyle, phraseLength: chineseText.length },
   });
 
   return Response.json({ override }, { status: 201 });

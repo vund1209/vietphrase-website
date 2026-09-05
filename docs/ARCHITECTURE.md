@@ -166,16 +166,23 @@ new/unsupported sites a reasonable shot rather than failing outright.
 ## Scrape timing: lazy, on first view — no job queue for v1
 
 When a book is added, only the chapter **list** is fetched immediately
-(fast — it's one page). Each chapter's actual content is scraped,
-filtered, translated, and cached **the first time someone views it**;
-every view after that is served from the cache instantly. This was
-chosen deliberately over eagerly scraping and translating every chapter
-in the background the moment a book is added, because lazy-on-view needs
-no background job queue or worker infrastructure at all for v1 — it's a
+(fast — it's one page). Each chapter's actual Chinese content is
+scraped and cached **the first time someone views it** (`rawText`);
+every view after that reuses the cached raw text with no re-scrape.
+This was chosen deliberately over eagerly scraping every chapter in the
+background the moment a book is added, because lazy-on-view needs no
+background job queue or worker infrastructure at all for v1 — it's a
 normal request with a brief loading state on first view only. An eager
 "pre-fetch this whole book" option can be added later as a real
 background job once there's a reason to want one; nothing in this design
 blocks that.
+
+**Revised 2026-09-06**: only the raw Chinese text is cached — VietPhrase
+translation is a render-time layer applied to `rawText` on *every* view,
+not a separately cached column (see "Read-path layering" below). This is
+the actual VietPhrase-tool model (confirmed against the reference
+VietPhrase Analyzer tool), and it means a dictionary change takes effect
+on the very next view with no invalidation step at all.
 
 ## Data model
 
@@ -390,22 +397,19 @@ tell whose edit is whose. The fix is to give every override an owner:
   nullable `promotedByUserId` for a lightweight audit trail of who
   promoted what.
 
-**Read-path layering**, per `src/lib/overrides.ts` /
-`src/lib/novels.ts`: an anonymous reader (or a signed-in reader with no
-personal overrides for that novel) is served the existing cached
-`Chapter.translatedText` exactly as before -- zero behavior change, zero
-added cost. A signed-in reader is instead served a freshly re-tokenized
-render of `Chapter.rawText`, with their own `UserWordOverride` rows
-layered on top of the shared `Name` dictionary (personal always wins on
+**Read-path layering** (revised 2026-09-06 -- see `src/lib/overrides.ts` /
+`src/lib/novels.ts`): there is no cached translated column at all
+anymore. Every view re-tokenizes `Chapter.rawText` fresh: an anonymous
+reader gets a flat string (`translateText`, the shared `Name` dictionary
+only), a signed-in reader gets the interactive per-token breakdown
+(`tokenizeLines`, the shared `Name` dictionary with their own
+`UserWordOverride` rows layered on top -- personal always wins on
 conflict, never affects what anyone else sees). This re-tokenize is
 cheap -- an in-memory SQLite pass over text already in hand, not a
-re-scrape -- but it does mean a signed-in reader always pays that cost,
-even with zero personal overrides, in exchange for getting the
-interactive per-word view. The shared `translatedText` cache column
-itself is untouched by a personal override; it only gets invalidated
-(cleared, chapter status reset to `SCRAPED` so it lazily re-translates
-next view) when an editor **promotes** an override into `Name`, since
-that's the one action that changes what every reader sees.
+re-scrape -- so there's no meaningful cost difference between the two
+paths anymore, and nothing to invalidate when an editor **promotes** an
+override into `Name`: the very next view of any chapter simply renders
+against the updated dictionary.
 
 **Promotion** (`POST /api/novels/[slug]/overrides/promote`, EDITOR role
 required, re-checked server-side regardless of what the UI shows) takes
