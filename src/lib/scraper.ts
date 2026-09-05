@@ -7,7 +7,7 @@ import { extractChapterList } from "./extract/chapterList.ts";
 import { extractChapterContent } from "./extract/chapterContent.ts";
 import { resolveAdapter } from "./extract/adapters.ts";
 import { filterBlacklist } from "./blacklist.ts";
-import { looksLikeBotChallenge, fetchWithHeadlessBrowser } from "./browserFetch.ts";
+import { looksLikeBotChallenge } from "./botChallenge.ts";
 import type { ChapterListItem } from "./extract/types";
 
 const FETCH_HEADERS = {
@@ -26,6 +26,13 @@ async function fetchHtml(url: string): Promise<string> {
   const res = await fetch(url, { headers: FETCH_HEADERS });
   const html = await res.text();
   if (looksLikeBotChallenge(res.status, html)) {
+    // Dynamic import: browserFetch.ts pulls in playwright-core, a heavy
+    // dependency that should only ever load for the rare request that's
+    // actually bot-challenged -- keeping it out of this module's static
+    // import graph means every other page that transitively imports
+    // scraper.ts (nearly all of them, via src/lib/novels.ts) never touches
+    // playwright-core at all.
+    const { fetchWithHeadlessBrowser } = await import("./browserFetch.ts");
     return fetchWithHeadlessBrowser(url);
   }
   if (!res.ok) {

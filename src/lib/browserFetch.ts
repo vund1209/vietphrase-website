@@ -13,25 +13,12 @@
 // Chromium via the plain `playwright` package (a devDependency -- see
 // package.json; run `npx playwright install chromium` once locally).
 import { chromium as playwrightChromium } from "playwright-core";
+import { looksLikeBotChallenge } from "./botChallenge.ts";
 
 const FETCH_HEADERS = {
   "User-Agent":
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
 };
-
-const BOT_CHALLENGE_RE =
-  /just a moment|attention required|cf-browser-verification|__cf_chl_|checking your browser|access denied|enable javascript and cookies/i;
-
-// Exported for scraper.ts's fetchHtml (the main embed pipeline), which
-// needs the same bot-challenge fallback but must still throw its own
-// descriptive error for a genuine (non-challenge) HTTP failure like a 404
-// -- fetchRawHtml below doesn't distinguish those, which is fine for
-// Browse mode (best-effort rendering) but not for an add-a-book flow that
-// needs to tell the difference.
-export function looksLikeBotChallenge(status: number, html: string): boolean {
-  if (status === 403 || status === 503) return true;
-  return BOT_CHALLENGE_RE.test(html.slice(0, 4000));
-}
 
 async function fetchPlain(url: string): Promise<{ status: number; html: string }> {
   const res = await fetch(url, { headers: FETCH_HEADERS });
