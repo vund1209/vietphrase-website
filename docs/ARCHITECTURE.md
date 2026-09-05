@@ -7,6 +7,14 @@ before the app is scaffolded. `docs/VIETPHRASE_CORE.md` covers the
 translation engine itself; this doc covers everything around it: what the
 site does, how content gets in, and how it's stored.
 
+**Reference implementation: sangtacviet.com.** The product being built is
+explicitly modeled on this real, existing site — a Vietnamese reader for
+Chinese web novels using VietPhrase-style translation. When a design
+question here is ambiguous, "what would sangtacviet do" is a legitimate
+tiebreaker, and concrete samples from it (like the translate-endpoint
+contract below) should be treated as informed precedent, not just
+inspiration.
+
 ## The three surfaces, and why they're really one pipeline
 
 The product was described as three features:
@@ -36,7 +44,7 @@ exposure than extracting and re-hosting text, which is what this is.
 
 (3) is the odd one out, and stays simple: no scraping, no persistence —
 just `packages/tokenizer` run directly against whatever text the user
-pastes.
+pastes. See "Translate page: API design" below for the concrete contract.
 
 ```
 [Add book by URL]  ──┐
@@ -81,7 +89,12 @@ designed, not yet validated against real pages):
 Per-site adapters, when needed, implement a common interface
 (`matches(url)`, `getBookMetadata(url)`, `getChapterList(url)`,
 `getChapterContent(url)`) and are tried before falling back to the
-generic extractor.
+generic extractor. Confirmed with the user this is the expected shape of
+things long-term, not just a stopgap: new Chinese novel sites get added
+by writing a new adapter for that site's specific pattern as it comes up,
+same as sangtacviet.com and similar tools have historically done —
+support grows one site at a time, the generic extractor is there to give
+new/unsupported sites a reasonable shot rather than failing outright.
 
 ## Scrape timing: lazy, on first view — no job queue for v1
 
@@ -137,8 +150,46 @@ enum NovelStatus {
 }
 ```
 
-This isn't applied to `prisma/schema.prisma` yet as of this doc being
-written — see the commit that follows this one for whether it has been.
+Applied to `prisma/schema.prisma` as of the commit immediately following
+this doc's initial version — the snippet above is kept here for context,
+but the actual schema file is the source of truth if the two ever drift.
+
+## Translate page: API design
+
+sangtacviet.com's own translate-box UI calls a plain AJAX endpoint —
+captured directly from the real site, useful as concrete precedent for
+ours:
+
+```
+POST /index.php?ngmar=trans&langhint=chinese HTTP/1.1
+Content-type: application/x-www-form-urlencoded
+
+ajax=trans&content=<percent-encoded Chinese text>
+```
+
+Response body is just the translated text, plain, no JSON wrapper:
+
+```
+Tại hạ chỉ muốn cướp đi các vị đại bảo kiếm
+```
+
+(for input `在下只想夺走各位的大宝剑`)
+
+Our equivalent should be a single small API route, e.g. `POST /api/translate`
+with a JSON body (`{ "content": "..." }`) rather than form-encoding — no
+real reason to match their wire format exactly, only the *shape* of the
+interaction (one text in, one call, translated text back, no persistence,
+no auth needed). Where this should deliberately go further than
+sangtacviet's plain-text response: `packages/tokenizer`'s `tokenize()`
+already returns structured tokens (source table, matched span, chosen
+translation, raw alternatives), not just a joined string. The API should
+return that structured array, not a flattened string, even though the v1
+UI probably just joins it for display — the token boundaries are what a
+later "click a phrase to see alternatives / edit the dictionary" feature
+would need, and it's free to keep them now versus expensive to
+reconstruct later. `langhint=chinese` in their URL hints their endpoint
+may be multi-language; ours doesn't need that param at all since this
+whole project is Chinese-to-Vietnamese only.
 
 ## Open problem: discovering the parent book from a single chapter URL
 

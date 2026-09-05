@@ -30,25 +30,15 @@ versions, not the Windows versions above:
 | Node.js | 22.23.2 |
 | npm | 10.9.8 (hit an unrelated internal bug on any install attempt: `Cannot read properties of null (reading 'edgesOut')`) |
 
-This matters most for `packages/tokenizer`, which is built entirely on
+This mattered most for `packages/tokenizer`, which is built entirely on
 Node's built-in `node:sqlite` module -- explicitly marked **experimental**
 as of Node 22, meaning its API is allowed to change between major
-versions without the usual stability guarantees. It has NOT been run on
-Node 26.8.1 as of this writing.
+versions without the usual stability guarantees.
 
-**Before trusting `packages/tokenizer` for real, run its test suite on
-the actual Windows machine:**
-
-```
-cd packages/tokenizer
-npm test
-```
-
-All 10 tests should pass, unchanged. If `node:sqlite`'s API shifted
-between Node 22 and Node 26, this is where it would surface first --
-either as a hard error (best case, obvious) or as a subtle behavior
-change (worse case, silent). Report back what happens; don't assume it's
-fine just because it worked here.
+**Confirmed 2026-09-05**: `npm test` run on the real Windows machine
+(Node 26.8.1) -- all 10 tests pass, unchanged, same as on the bridged
+Linux environment's Node 22.23.2. `node:sqlite`'s API did not shift in a
+way that affects this module between those two versions.
 
 Smaller, unverified risk: `build_dictionary.py`'s one third-party
 dependency, `opencc-python-reimplemented`, hasn't been checked against
