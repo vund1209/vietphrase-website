@@ -105,18 +105,22 @@ the app exists.
 
 ## Next up
 
-- **Prisma/Postgres wiring**: pick a provider (Neon or Supabase free
-  tier), set a real `DATABASE_URL` in a local `.env` (never commit it —
-  copy `.env.example`), run `npx prisma generate`/`migrate dev` **on a
-  machine with normal internet access** (this repo's bridged dev
-  environment can't reach `binaries.prisma.sh` — see
-  `docs/ENVIRONMENT.md`), then write the one-time import script loading
-  `dictionary_seed.db` into Postgres (via the reserved "global" Novel row
-  for names).
-- **In-memory dictionary cache**: once `packages/tokenizer` moves from
-  SQLite to Prisma/Postgres, it must load the dictionary into memory once
-  at startup rather than issuing one DB query per candidate substring —
-  see `docs/ARCHITECTURE.md` for the note on this.
+- **Done**: Prisma/Postgres wiring. Neon is live (free tier,
+  ap-southeast-1), `prisma/schema.prisma` is verified against it (`npx
+  prisma migrate dev` applied cleanly), and the migration history is
+  committed under `prisma/migrations/`. See `docs/ARCHITECTURE.md`
+  "Hosting: cloud Postgres free tier — Neon" and "Data split" for what's
+  actually in Postgres now: only `Novel`/`Chapter`/per-novel `Name`
+  overrides, **not** a copy of the bulk dictionary (see below) — no
+  seed-import script needed, and none is planned.
+- **Tokenizer: per-novel override support.** `packages/tokenizer` still
+  only reads `data/seed/dictionary_seed.db` directly, which is correct
+  and stays that way for the bulk dictionary (see "Data split" in
+  `docs/ARCHITECTURE.md` for why it's *not* moving to Postgres). What's
+  still missing: an optional per-novel overrides map, fetched from
+  Postgres's `Name` table in one query per chapter translation (not one
+  query per substring), checked before the SQLite global names/pronouns/
+  words. Not implemented yet.
 - Scaffold the reading library: book-add-by-URL, chapter list, lazy
   scrape-on-view chapter page, using the generic-extraction-plus-adapters
   scraping strategy in `docs/ARCHITECTURE.md`.

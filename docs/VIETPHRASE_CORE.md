@@ -57,10 +57,15 @@ At each position in the input, moving left to right:
 1. Try match lengths from longest to shortest (see "window size" below).
    At each candidate length, look up the substring against, **in this
    priority order**:
-   1. `names` scoped to the current novel (`novel_id = <this novel>`)
-   2. `names` global fallback (`novel_id = <the reserved "global" row>`)
-   3. `pronouns`
-   4. `words`
+   1. Per-novel `Name` overrides (Postgres, `novelId = <this novel>`) --
+      only present once the live app exists; empty for the standalone
+      translate page, which has no novel context at all
+   2. `names` global fallback (SQLite seed, `data/seed/dictionary_seed.db`
+      -- its own `novel_id IS NULL` rows; see "Per-novel name resolution"
+      below for why this is a *different table in a different database*
+      than (1), not a fallback row within the same table)
+   3. `pronouns` (SQLite seed)
+   4. `words` (SQLite seed)
 2. The first hit — at the *longest* length any of the four sources match —
    wins. Category priority only breaks ties *within* the same match
    length; a longer `words` match beats a shorter `names`/`pronouns` match
@@ -273,14 +278,30 @@ tokenization) is decided; the interpreter itself is not written.
 
 ## Per-novel name resolution
 
-`names.novel_id` scopes an entry to one novel (see `docs/DICTIONARY_SOURCES.md`
-"Schema v3" and `prisma/schema.prisma`). Resolution order for a Name lookup
-is: try the current novel's scope first, fall back to the reserved "global"
-Novel row if the current novel has no override for that phrase. This means
-a user adding "萧炎 → Viêm Nhi" as a per-novel nickname override for one
-story doesn't affect the global "萧炎 → Tiêu Viêm" used everywhere else.
-Not implemented — this is a statement of intended behavior for whoever
-writes the lookup service.
+**Revised 2026-09-05** (see `docs/ARCHITECTURE.md` "Data split: bulk
+dictionary stays in SQLite; Postgres holds live app state only" for the
+full reasoning): global and per-novel names are no longer two scopes of
+the same table. They're two different tables in two different databases:
+
+- **Global names** live in `data/seed/dictionary_seed.db`'s `names`
+  table (SQLite) — the bulk, rebuilt-from-source dictionary, ~276k rows,
+  all effectively global (its own `novel_id` column and partial unique
+  index are a SQLite-seed-internal detail; see `docs/DICTIONARY_SOURCES.md`
+  "Schema v3" — this table's design didn't change).
+- **Per-novel overrides** live in Postgres's `Name` model
+  (`prisma/schema.prisma`) — starts empty for every novel, grows only as
+  a user actually curates one, `novelId` required on every row (there is
+  no "global" row in this table at all anymore).
+
+Resolution order for a Name lookup: check the current novel's Postgres
+overrides first, fall back to the SQLite global table if the current
+novel has no override for that phrase. This means a user adding
+"萧炎 → Viêm Nhi" as a per-novel nickname override for one story doesn't
+affect the global "萧炎 → Tiêu Viêm" used everywhere else. Not
+implemented yet — this is a statement of intended behavior for whoever
+writes the lookup service; see `docs/ARCHITECTURE.md`'s "Data split"
+section for the concrete shape (fetch all of a novel's overrides in one
+query per chapter translation, not one query per substring).
 
 ## scrape_blacklist
 

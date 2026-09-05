@@ -1,40 +1,42 @@
 // Live application schema for the VietPhrase translation site.
 //
-// This is a forward design spec, written before the Next.js app exists,
-// so the data layer is settled before app code gets built on top of it.
-// It mirrors data/seed/dictionary_seed.db (words/names/pronouns/
-// hanviet_fallback/scrape_blacklist) plus the `novels` scoping that seed
-// intentionally doesn't own. See docs/DICTIONARY_SOURCES.md ("Schema v3")
-// for the history of the words/names/pronouns split.
+// Design pivot (2026-09-05): the bulk, read-only dictionaries (Word,
+// Pronoun, HanvietFallback, ScrapeBlacklistPattern) do NOT live here
+// anymore -- they stay in data/seed/dictionary_seed.db, shipped
+// read-only alongside the app and loaded by packages/tokenizer directly.
+// Reason: that SQLite file is ~226 MB on disk (words alone is ~132 MB
+// across 1.43M rows, names ~30 MB across 276k rows) -- duplicating that
+// into Postgres would consume most or all of a free-tier Postgres
+// storage budget (Neon free tier: 0.5 GB total) before a single real
+// chapter of novel content is stored. It's also genuinely static data:
+// rebuilt from source via data/seed/build_dictionary.py, never edited
+// row-by-row through the app. There's no reason to pay Postgres storage
+// and query-latency cost for data that's already fast to read locally
+// from a bundled SQLite file.
+//
+// What Postgres actually holds is exactly the live, mutable application
+// state: which novels/chapters exist, their scrape/translate status and
+// cached text, and per-novel Name overrides that users actually curate
+// over time (starts empty, grows slowly -- nothing like the bulk seed
+// size). See docs/ARCHITECTURE.md ("Data access: avoid per-lookup DB
+// round-trips" and "Hosting: cloud Postgres free tier") for the full
+// reasoning and how the tokenizer combines both sources at request time.
+//
+// This replaces the earlier design (see git history prior to this
+// commit) where Word/Pronoun/HanvietFallback/ScrapeBlacklistPattern were
+// modeled here too, with a reserved "global" Novel row standing in for
+// Prisma's inability to express a partial-unique-index nullable scope.
+// That sentinel-row trick is no longer needed: since global/fallback
+// names now live in the SQLite seed file, every `Name` row in Postgres
+// is a real per-novel override with a required `novelId` -- there's no
+// "global" case to represent here at all.
 //
 // Design notes worth knowing before you touch this file:
 //
-// - `Word` / `Pronoun` are bulk, rebuilt-from-source dictionaries. Treat
-//   them as read-only from the app; changes happen by re-importing the
-//   seed data, not through user-facing CRUD.
-// - `Name` is the table users actually curate, scoped per novel via
-//   `novelId`. Global (fallback) names live under one reserved Novel row
-//   (slug "global", seeded once — look it up by slug, don't hardcode its
-//   id) rather than `novelId: null`. A nullable FK + partial unique index
-//   (`WHERE novel_id IS NULL`, as used in the SQLite seed script) would
-//   also work, but Prisma's schema DSL can't express a partial unique
-//   index — you'd have to hand-edit the generated migration SQL every
-//   time and keep that edit from getting silently dropped on the next
-//   `prisma migrate dev`. The sentinel-row approach keeps a single plain
-//   `@@unique([chineseText, novelId])` that Prisma generates natively,
-//   with the same correctness guarantee: one global entry per phrase, one
-//   per-novel override per phrase per novel.
-// - Soft delete (`isActive`) + `updatedAt` + `createdById` live on `Name`
-//   only, since that's the table getting edited row by row. `Word` /
-//   `Pronoun` don't need edit history yet — add it if/when that changes.
-// - `Novel` now does double duty: it's both the per-novel name-override
-//   scope above, AND the "Book" entity for the reading site (see
-//   docs/ARCHITECTURE.md) -- title/chapters/etc. That wasn't planned
-//   together, but a book's chapters and its name overrides genuinely
-//   belong to the same entity, so it converged naturally rather than
-//   being forced. The one reserved "global" Novel row (slug "global")
-//   is not a real book -- its `status`/`chapters` are meaningless for
-//   that row; it exists purely as the name-scoping fallback target.
+// - `Name` is the only dictionary-shaped table here, and it's genuinely
+//   live: it's what a per-novel override editing feature would write to.
+//   `novelId` is required -- a Name row with no specific novel doesn't
+//   exist in Postgres; that case is served from the SQLite seed instead.
 // - `Chapter.rawText`/`translatedText` are nullable because scraping is
 //   lazy (see docs/ARCHITECTURE.md "Scrape timing"): a chapter can exist
 //   -- known from the chapter list -- before it's ever been fetched.
@@ -53,11 +55,10 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
-/// Every novel/story being translated, plus one reserved row (slug
-/// "global") representing "no specific novel" — the fallback scope for
-/// names that aren't overridden per-story. Also the "Book" entity for
-/// the reading site (see docs/ARCHITECTURE.md) -- the reserved "global"
-/// row is the one exception, not a real book.
+/// Every novel/story being translated. Also the scope for per-novel Name
+/// overrides (see Name below) -- a book's chapters and its name
+/// overrides belong to the same entity, so this does double duty rather
+/// than being split into two tables.
 model Novel {
   id            Int         @id @default(autoincrement())
   slug          String      @unique
@@ -75,7 +76,7 @@ model Novel {
 }
 
 enum NovelStatus {
-  PENDING // chapter list not yet fetched (or: this is the reserved "global" row)
+  PENDING // chapter list not yet fetched
   READY // chapter list fetched; chapters fill in lazily as they're viewed
   ERROR // chapter list fetch failed
 }
@@ -111,23 +112,11 @@ enum ChapterStatus {
   ERROR // scrape or translation failed
 }
 
-/// Bulk phrase dictionary — the longest-match substitution target during
-/// tokenization. Loaded wholesale from data/seed/dictionary_seed.db;
-/// not edited row-by-row through the app.
-model Word {
-  id             Int      @id @default(autoincrement())
-  chineseText    String   @unique
-  vietnameseText String
-  phraseLength   Int
-  source         String
-  createdAt      DateTime @default(now())
-
-  @@index([phraseLength])
-  @@map("words")
-}
-
-/// Proper nouns — checked before Word during tokenization (higher lookup
-/// priority). The dictionary users actually curate over time, per novel.
+/// Per-novel proper-noun overrides -- the dictionary users actually
+/// curate over time, one novel at a time. Checked before the SQLite
+/// seed's global names/pronouns/words during tokenization (see
+/// docs/VIETPHRASE_CORE.md). Starts empty for every novel; there is no
+/// bulk import into this table.
 model Name {
   id             Int      @id @default(autoincrement())
   chineseText    String
@@ -137,7 +126,7 @@ model Name {
   novel          Novel    @relation(fields: [novelId], references: [id], onDelete: Cascade)
   source         String
   isActive       Boolean  @default(true)
-  createdById    String? // nullable: seed-imported rows have no user author
+  createdById    String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -145,38 +134,4 @@ model Name {
   @@index([phraseLength])
   @@index([novelId])
   @@map("names")
-}
-
-/// Pronoun substitutions — small, curated, not per-novel scoped (context-
-/// dependent resolution, not identity-dependent like names).
-model Pronoun {
-  id             Int      @id @default(autoincrement())
-  chineseText    String   @unique
-  vietnameseText String
-  phraseLength   Int
-  source         String
-  createdAt      DateTime @default(now())
-
-  @@map("pronouns")
-}
-
-/// Single-character Han-Viet reading — last-resort fallback when no
-/// multi-character match is found in Name, Word, or Pronoun.
-model HanvietFallback {
-  id              Int    @id @default(autoincrement())
-  chineseChar     String @unique
-  hanvietReadings String
-  source          String
-
-  @@map("hanviet_fallback")
-}
-
-/// Line/paragraph patterns to strip from raw scraped chapter text before
-/// it reaches the tokenizer. Not part of translation lookup.
-model ScrapeBlacklistPattern {
-  id      Int    @id @default(autoincrement())
-  pattern String @unique
-  source  String
-
-  @@map("scrape_blacklist")
 }

@@ -200,25 +200,51 @@ reconstruct later. `langhint=chinese` in their URL hints their endpoint
 may be multi-language; ours doesn't need that param at all since this
 whole project is Chinese-to-Vietnamese only.
 
-## Data access: avoid per-lookup DB round-trips
+## Data split: bulk dictionary stays in SQLite; Postgres holds live app state only
 
-The current `packages/tokenizer` implementation (used as-is by
-`/api/translate` today) queries SQLite once per candidate substring while
-scanning for the longest match -- fine for a local SQLite file (same
-process, no network), but this must **not** carry over unchanged once the
-tokenizer is pointed at Postgres/Prisma. One network round-trip per
-candidate substring, over a real chapter of text, would be slow and
-would hammer the database on every single translation.
+**Revised 2026-09-05, after the first real Neon connection made the
+storage math concrete.** `prisma/schema.prisma` originally mirrored the
+entire seed dictionary (`Word`/`Pronoun`/`HanvietFallback`/
+`ScrapeBlacklistPattern`, plus a "global" sentinel `Novel` row so `Name`
+could represent both global and per-novel entries) into Postgres. Checked
+against the actual seed file: `data/seed/dictionary_seed.db` is ~226 MB,
+`words` alone ~132 MB across 1.43M rows, `names` ~30 MB across 276k rows.
+Neon's free tier caps total storage at 0.5 GB. Importing the bulk tables
+wholesale would burn most or all of that budget before a single chapter
+of real novel content gets stored -- not a viable design for a
+free-tier-hosted app, and it's also duplicating data that never changes
+at runtime (`words`/`pronouns`/`hanviet_fallback`/`scrape_blacklist` are
+rebuilt from source, never edited row-by-row through the app -- see
+`docs/DICTIONARY_SOURCES.md`).
 
-Before wiring the tokenizer to Postgres, it needs to load the relevant
-dictionary tables (or the relevant per-novel slice of `names`, plus all of
-`pronouns`/`words`/`hanviet_fallback`) into an in-memory structure once
-(at process startup, or lazily on first use and then cached), and do all
-longest-match scanning against that in-memory structure instead of
-issuing a query per lookup. This is a correction to the original design,
-not yet implemented -- `packages/tokenizer` still talks to SQLite
-directly as of this writing. Flagging it here so it isn't forgotten once
-the Prisma migration work starts.
+**Current design:** those four bulk tables stay exactly where they are --
+`data/seed/dictionary_seed.db`, shipped read-only alongside the deployed
+app, read directly by `packages/tokenizer` via `node:sqlite` (same as
+today). Postgres only models what's actually live and mutable: `Novel`,
+`Chapter`, and per-novel `Name` overrides. This also means the "global"
+sentinel-row trick is gone from `prisma/schema.prisma` entirely -- every
+`Name` row in Postgres now has a required `novelId`, since the global/
+fallback name tier lives in the SQLite seed's own `names` table (which
+keeps its existing nullable-`novel_id` / partial-unique-index design,
+unchanged -- that schema was never the problem, only mirroring it into
+Postgres was).
+
+**What this means for the tokenizer, and the per-lookup round-trip
+concern that used to be documented here:** since the bulk dictionary
+never moves to Postgres, `packages/tokenizer`'s existing per-substring
+SQLite queries stay exactly as they are -- fine, because that's a local
+file with no network hop. The only Postgres-backed layer is per-novel
+`Name` overrides, and those don't need a query per candidate substring
+either: fetch every override row for the current `novelId` in **one**
+query at the start of translating a chapter (there are at most a few
+hundred per novel, realistically far fewer), build a small in-memory Map
+from it, and check that Map first at each tokenizer position before
+falling through to SQLite's global `names`/`pronouns`/`words`. One
+Postgres round-trip per chapter translation, not per substring -- this is
+the shape `packages/tokenizer` needs to grow into (an optional
+`overrides` map parameter to `tokenize()`), not yet implemented. See
+`docs/VIETPHRASE_CORE.md` "Per-novel name resolution" for how this
+changes the lookup priority order.
 
 ## Hosting: cloud Postgres free tier — Neon
 
