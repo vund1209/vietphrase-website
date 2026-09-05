@@ -45,8 +45,8 @@ for a future detailed-lookup panel).
 
 | Table | Rows | Notes |
 |---|---|---|
-| `words` | 1,489,074 | bulk phrase substitutions, rebuilt from source |
-| `names` | 276,268 | proper nouns; `novel_id` nullable (NULL = global; all seed rows are global) |
+| `words` | 1,432,932 | bulk phrase substitutions, rebuilt from source |
+| `names` | 276,248 | proper nouns; `novel_id` nullable (NULL = global; all seed rows are global) |
 | `pronouns` | 1,427 | pronoun substitutions, tuned for readability |
 | `hanviet_fallback` | 17,564 | single-character Han-Viet reading, last-resort fallback |
 | `scrape_blacklist` | 274 | scrape-time text-cleaning patterns |

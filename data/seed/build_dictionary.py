@@ -44,9 +44,24 @@ CHAPTER_JUNK_PATTERNS = [
     re.compile(r"^正文\s*\d+\s*$"),
     re.compile(r"^第?[0-9一二三四五六七八九十百千万零]+\s*[章节節回卷集幕折]$"),
     re.compile(r"^[0-9]+\s*(亿|億|万|萬|元|美元|块|個|个)"),
+    # chapter labels combining multiple chapter numbers, e.g.
+    # "第 1692+1693+1694 章" -- the plain-digit pattern above doesn't
+    # allow "+"/","/spaces inside the number run, so this one does.
+    re.compile(r"^第?[0-9+,、\-～~\s]+[章节節回卷集幕折]\s*$"),
+    # full Chinese calendar dates, e.g. "2006年08月24日" / "2013 年 10 月 27 日"
+    # (with or without spaces around each unit). These are one-off
+    # translation-memory literals from real scraping runs, not general
+    # dictionary content -- see "Kept as reference only" / rule.txt in
+    # docs/DICTIONARY_SOURCES.md for the intended algorithmic replacement.
+    re.compile(r"^\d{1,4}\s*年\s*\d{1,2}\s*月\s*\d{1,2}\s*[日号號]\s*$"),
 ]
 CHAPTER_JUNK_VI_PATTERNS = [
     re.compile(r"^(Chương|Hồi|Chapter)\s*\d+", re.I),
+    # date-shaped Vietnamese output, catches malformed Chinese-side keys
+    # (e.g. a stray romanization typo replacing "日") that the Chinese-side
+    # date pattern above would otherwise miss.
+    re.compile(r"^(ngày|Ngày)\s+\d+\s+tháng", re.I),
+    re.compile(r"^\d+\s+tháng.*năm\s+\d+", re.I),
 ]
 
 
@@ -57,12 +72,41 @@ def is_junk(chinese: str, vietnamese: str) -> bool:
     return any(p.search(combined) for p in JUNK_PATTERNS)
 
 
+def is_number_unit_artifact(chinese: str) -> bool:
+    """Catches the general "number + counter/calendar word" shape that
+    CHAPTER_JUNK_PATTERNS' specific date/chapter regexes don't enumerate --
+    e.g. "542年" (year, no month/day), "827两" (a weight), "4点钟" (a time),
+    "40 公分左右" (a measurement). These are one-off translation-memory
+    literals from a specific scraped novel, not general dictionary
+    content -- the underlying number is unbounded, so no finite set of
+    these will ever be complete (see docs/DICTIONARY_SOURCES.md on why
+    Vietphrase_Number.txt/Vietphrase_Chapter.txt were excluded outright).
+
+    Heuristic: the phrase starts with an ASCII digit, and everything
+    that's left after removing digits and whitespace is short (<=6 chars)
+    and entirely CJK. This deliberately does NOT flag digit-led phrases
+    mixed with Latin letters/symbols (e.g. "5G网络", "3D打印", "4K电视"),
+    since those are real terms, not open-ended number+unit combinations.
+    """
+    chinese = chinese.strip()
+    if not chinese or not chinese[0].isdigit():
+        return False
+    remainder = [c for c in chinese if not (c.isdigit() or c.isspace())]
+    if not remainder:
+        return True  # pure number, e.g. a bare "1997" key
+    if len(remainder) > 6:
+        return False
+    return all("\u4e00" <= c <= "\u9fff" for c in remainder)
+
+
 def is_chapter_or_number_artifact(chinese: str, vietnamese: str) -> bool:
     chinese = chinese.strip()
     vietnamese = vietnamese.strip()
     if any(p.match(chinese) for p in CHAPTER_JUNK_PATTERNS):
         return True
     if any(p.match(vietnamese) for p in CHAPTER_JUNK_VI_PATTERNS):
+        return True
+    if is_number_unit_artifact(chinese):
         return True
     return False
 
@@ -394,7 +438,7 @@ if __name__ == "__main__":
         if not path.exists():
             print(f"[skip] {label}: {path} not found")
             continue
-        parsed = parse_phrase_dict(path, label)
+        parsed = parse_phrase_dict(path, label, filter_chapter_junk=True)
         added = 0
         for zh, vi in parsed.items():
             if zh in seen_word_keys:

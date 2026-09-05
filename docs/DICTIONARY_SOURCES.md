@@ -8,8 +8,8 @@ reproduce the build yourself.
 
 | Table | Rows | What it's for |
 |---|---|---|
-| `words` | 1,489,074 | general phrase substitutions |
-| `names` | 276,268 | proper nouns — characters, places, sects, techniques (new in v2; own table since v3) |
+| `words` | 1,432,932 | general phrase substitutions |
+| `names` | 276,248 | proper nouns — characters, places, sects, techniques (new in v2; own table since v3) |
 | `pronouns` | 1,427 | pronoun substitutions, tuned for readability (new in v2; own table since v3) |
 | `hanviet_fallback` | 17,564 | single-character Hán-Việt reading, last-resort fallback |
 | `scrape_blacklist` | 274 | junk line/paragraph patterns seen in real scraped novel text (site ads, "to be continued" banners) — for cleaning raw chapter text at scrape time, not part of translation |
@@ -284,6 +284,12 @@ Reasoning:
   with inconsistent Unicode composition don't silently fail to match at
   lookup time. This collapsed exactly 1 duplicate word key on migration
   (1,489,075 -> 1,489,074) — expected and harmless.
+- **The chapter/number-artifact filter now applies to the Word merge too**,
+  not just Names — see `docs/VIETPHRASE_CORE.md` ("Confirmed data-quality
+  issue") for the full story. This is a second, later rebuild on top of
+  the v3 schema change above: `words` went from 1,489,074 -> 1,432,932
+  after removing ~56K one-off numeral/date/chapter-label translation-
+  memory literals that had leaked in.
 
 This split intentionally does not extend to `pronouns` getting its own
 scoping, or to a full edit-history table for `names` — both are easy to add

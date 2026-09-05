@@ -174,14 +174,27 @@ exactly the failure mode `DICTIONARY_SOURCES.md` already warned about for
 the numeral tables it deliberately declined to import wholesale
 (`Vietphrase_Number.txt`, `Vietphrase_Chapter.txt`).
 
-**Not fixed yet.** The right fix is almost certainly to re-run
-`build_dictionary.py`'s Word merge with the same `is_chapter_or_number_artifact`
-filter already used for Names (or a similar one tuned for pure-numeral/
-date patterns), then re-run `migrate_split_schema.py`. Left undone for now
-since it needs the `ref/` source clones to rebuild from scratch (see
-"Reproducing this build" in `DICTIONARY_SOURCES.md`) — flagging here so
-it isn't lost before the grammar-rule interpreter is built and someone
-wonders why date handling is inconsistent.
+**Fixed.** `build_dictionary.py` now applies `filter_chapter_junk=True` to
+the Word merge (previously only Names opted in), plus a new general
+`is_number_unit_artifact()` check catching the shape CHAPTER_JUNK_PATTERNS'
+specific date/chapter regexes didn't enumerate — bare "N年" (year, no
+month/day), "N点钟" (a time), "N里"/"N两"/"N级" (a measurement/rank), etc.
+Rebuilt from a fresh `ref/` clone: digit-leading `words` rows went from
+17,280 -> 321 (98% reduction), with the remaining 321 being mostly
+legitimate OCR/typo-correction entries (`4ooo` -> `4000`, `5 o` -> `50`)
+rather than junk — a reasonable stopping point, since chasing those risks
+false positives on entries that are actually useful. `words` total:
+1,489,074 -> 1,432,932.
+
+Re-running the prototype tokenizer confirms the fix changed behavior as
+intended: `2006年08月24日` no longer hits the lucky one-off literal
+`8月24日` entry (now removed) and instead falls back consistently to
+per-character matches (年 -> `năm`, 月 -> `tháng`, 日 -> `ngày`, digits
+unmatched). That's not good output — it's still fragmented — but it's
+now *honestly* fragmented every time, rather than silently correct for
+one specific date and wrong for every other one. Fixing this for real is
+still the grammar-rule interpreter's job (above), not more dictionary
+cleaning.
 
 ## Known risk: Simplified vs. Traditional Chinese are NOT normalized
 
@@ -285,8 +298,7 @@ buried in prose above:
    normalization vs. query-time dual lookup. Not decided.
 5. Where exactly the "future readability pass" (step [4]) starts once
    grammar-rule reordering is implemented — not scoped at all yet.
-6. Cleaning the ~17,280 numeral/date-junk rows out of `words` (see above)
-   — needs a `ref/` rebuild or a targeted delete-and-rebuild pass. Not
-   done.
+6. ~~Cleaning the numeral/date-junk rows out of `words`~~ — **done**,
+   see "Confirmed data-quality issue" above (17,280 -> 321 rows).
 7. Punctuation mapping (full-width Chinese punctuation -> Vietnamese
    equivalents) — not designed, not implemented.
