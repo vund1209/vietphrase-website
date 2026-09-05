@@ -44,6 +44,11 @@
 
 generator client {
   provider = "prisma-client-js"
+  // "native" covers the real Windows dev machine (see docs/ENVIRONMENT.md);
+  // "debian-openssl-3.0.x" additionally covers the bridged Linux dev
+  // environment Claude Code Remote uses, so the generated client works
+  // from both without needing a separate generate step per environment.
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
 
 datasource db {

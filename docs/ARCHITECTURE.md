@@ -75,6 +75,27 @@ pastes. See "Translate page: API design" below for the concrete contract.
 
 ## Scraping strategy: generic extraction, adapters as a fallback
 
+**Implementation status (2026-09-05): built, unit-tested, not yet
+verified end-to-end against the live Neon database.** The generic
+extractors (`src/lib/extract/chapterList.ts`, `chapterContent.ts`),
+the scraper entry points (`src/lib/scraper.ts`), the Novel/Chapter API
+routes (`src/app/api/novels/...`), and the reading UI (home page's
+add-by-URL form + library list, `/novels/[slug]`, `/novels/[slug]/
+chapters/[number]`) all exist and pass `npm test` (synthetic HTML
+fixtures) plus a synthetic-site dev-server smoke test (fake local HTTP
+server standing in for a Chinese novel site). What that smoke test
+could NOT verify: Prisma Client, as generated on the real Windows
+machine, has no Linux query engine binary, so every Postgres-touching
+route 500s when run through the bridged Linux dev environment. Fixed by
+adding `binaryTargets = ["native", "debian-openssl-3.0.x"]` to
+`prisma/schema.prisma`'s generator block -- purely additive, doesn't
+change the Windows dev flow -- but it needs one `npx prisma generate`
+run on the real machine to actually download that binary before a true
+live end-to-end pass (real Neon writes, not just compilation) can
+happen from either environment. Still fully unvalidated against any
+real Chinese novel site, per the "Open problem" section below and the
+user's explicit choice to proceed generically rather than wait for one.
+
 Chinese novel sites vary too much to hand-write a parser per site up
 front, and there's no fixed list of target sites yet. Start with a
 generic heuristic extractor that works reasonably across most sites

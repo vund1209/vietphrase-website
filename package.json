@@ -10,11 +10,12 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "npm test --workspaces --if-present"
+    "test": "node --test"
   },
   "dependencies": {
     "@prisma/client": "^6",
     "@vietphrase/tokenizer": "*",
+    "cheerio": "^1.2.0",
     "next": "16.3.4",
     "react": "19.2.8",
     "react-dom": "19.2.8"

@@ -1,0 +1,58 @@
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { getNovelBySlug } from "@/lib/novels";
+
+// Library/reader pages show live, per-request data (novels/chapters get
+// added and translated at runtime) -- never statically prerender these.
+export const dynamic = "force-dynamic";
+
+const STATUS_LABEL: Record<string, string> = {
+  PENDING: "Chưa dịch",
+  SCRAPED: "Đã lấy nội dung",
+  TRANSLATED: "Đã dịch",
+  ERROR: "Lỗi",
+};
+
+export default async function NovelPage({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}) {
+  const { slug } = await params;
+  const novel = await getNovelBySlug(slug);
+  if (!novel) notFound();
+
+  return (
+    <main className="mx-auto flex max-w-3xl flex-1 flex-col gap-6 p-6">
+      <div>
+        <Link href="/" className="text-sm text-neutral-500 hover:underline">
+          ← Thư viện
+        </Link>
+        <h1 className="text-2xl font-semibold">{novel.title}</h1>
+        {novel.sourceUrl && (
+          <p className="text-sm text-neutral-500 break-all">
+            Nguồn: {novel.sourceUrl}
+          </p>
+        )}
+      </div>
+
+      <ul className="flex flex-col divide-y divide-neutral-200 dark:divide-neutral-800">
+        {novel.chapters.map((chapter) => (
+          <li key={chapter.chapterNumber}>
+            <Link
+              href={`/novels/${novel.slug}/chapters/${chapter.chapterNumber}`}
+              className="flex items-center justify-between gap-4 py-3 hover:bg-neutral-50 dark:hover:bg-neutral-900"
+            >
+              <span>
+                Chương {chapter.chapterNumber}: {chapter.title}
+              </span>
+              <span className="shrink-0 text-xs text-neutral-400">
+                {STATUS_LABEL[chapter.status] ?? chapter.status}
+              </span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </main>
+  );
+}

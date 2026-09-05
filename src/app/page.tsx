@@ -1,6 +1,17 @@
 import Link from "next/link";
+import { prisma } from "@/lib/prisma";
+import { AddBookForm } from "./AddBookForm";
 
-export default function HomePage() {
+// Library/reader pages show live, per-request data (novels/chapters get
+// added and translated at runtime) -- never statically prerender these.
+export const dynamic = "force-dynamic";
+
+export default async function HomePage() {
+  const novels = await prisma.novel.findMany({
+    orderBy: { createdAt: "desc" },
+    include: { _count: { select: { chapters: true } } },
+  });
+
   return (
     <main className="mx-auto flex max-w-3xl flex-1 flex-col gap-6 p-6">
       <h1 className="text-2xl font-semibold">VietPhrase</h1>
@@ -11,24 +22,53 @@ export default function HomePage() {
         </code>{" "}
         để biết kiến trúc tổng thể.
       </p>
-      <div className="flex flex-col gap-3">
-        <Link
-          href="/translate"
-          className="rounded-md border border-neutral-300 p-4 hover:bg-neutral-50 dark:border-neutral-700 dark:hover:bg-neutral-900"
-        >
-          <div className="font-medium">Dịch nhanh</div>
-          <div className="text-sm text-neutral-500">
-            Dán văn bản tiếng Trung, nhận bản dịch VietPhrase ngay lập tức. Đã hoạt động.
-          </div>
-        </Link>
-        <div className="rounded-md border border-dashed border-neutral-300 p-4 text-neutral-400 dark:border-neutral-700">
-          <div className="font-medium">Thư viện truyện (sắp có)</div>
-          <div className="text-sm">
-            Thêm truyện bằng URL, đọc theo chương — cần kết nối Postgres trước
-            (xem docs/ARCHITECTURE.md).
-          </div>
+
+      <Link
+        href="/translate"
+        className="rounded-md border border-neutral-300 p-4 hover:bg-neutral-50 dark:border-neutral-700 dark:hover:bg-neutral-900"
+      >
+        <div className="font-medium">Dịch nhanh</div>
+        <div className="text-sm text-neutral-500">
+          Dán văn bản tiếng Trung, nhận bản dịch VietPhrase ngay lập tức.
         </div>
-      </div>
+      </Link>
+
+      <section className="flex flex-col gap-3">
+        <h2 className="text-lg font-medium">Thêm truyện mới</h2>
+        <p className="text-sm text-neutral-500">
+          Dán URL trang mục lục (danh sách chương) của một truyện trên trang
+          web tiếng Trung. Hệ thống dùng bộ trích xuất chung (xem{" "}
+          <code className="rounded bg-neutral-100 px-1 dark:bg-neutral-800">
+            docs/ARCHITECTURE.md
+          </code>
+          ) — chưa được kiểm chứng trên trang thật nào, có thể thất bại với
+          một số trang.
+        </p>
+        <AddBookForm />
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <h2 className="text-lg font-medium">Thư viện truyện</h2>
+        {novels.length === 0 ? (
+          <p className="text-sm text-neutral-400">Chưa có truyện nào. Thêm truyện ở trên.</p>
+        ) : (
+          <ul className="flex flex-col gap-2">
+            {novels.map((novel) => (
+              <li key={novel.slug}>
+                <Link
+                  href={`/novels/${novel.slug}`}
+                  className="block rounded-md border border-neutral-300 p-3 hover:bg-neutral-50 dark:border-neutral-700 dark:hover:bg-neutral-900"
+                >
+                  <div className="font-medium">{novel.title}</div>
+                  <div className="text-sm text-neutral-500">
+                    {novel._count.chapters} chương
+                  </div>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
     </main>
   );
 }

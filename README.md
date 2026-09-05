@@ -35,17 +35,24 @@ npm run dev
 Then visit `http://localhost:3000/translate` and paste Chinese text in the
 input box to get a VietPhrase translation — this reads
 `data/seed/dictionary_seed.db` directly via `packages/tokenizer`, no
-database setup required for this page. The home page (`/`) links to it;
-the reading-library link there is a disabled placeholder for now.
+database setup required for this page.
 
-To run the tokenizer's own test suite:
+The home page (`/`) is the reading library: paste a book's chapter-list
+URL to add it, then click through to read chapters (scraped and
+translated lazily, on first view, and cached after). Needs a working
+`DATABASE_URL`/`DIRECT_URL` in `.env` (see `.env.example`) and, if
+you're running this through Claude Code Remote's bridged Linux
+environment rather than natively, a `npx prisma generate` re-run to pick
+up `prisma/schema.prisma`'s `binaryTargets` — see "Next up" below.
+
+To run the whole test suite (tokenizer + the scraper's extraction
+heuristics):
 
 ```
-npm test --workspace=@vietphrase/tokenizer
+npm test
 ```
 
-Prisma/Postgres are not wired up yet — `prisma/schema.prisma` is a forward
-design, not a running database. See "Next up" below.
+See "Next up" below for what's implemented vs. still open.
 
 ## Structure
 
@@ -67,7 +74,8 @@ vietphrase-website/
 ├── .nvmrc                              # pins Node to the versions in ENVIRONMENT.md
 ├── .python-version                     # pins Python to the versions in ENVIRONMENT.md
 ├── src/
-│   └── app/                            # Next.js App Router: /, /translate, /api/translate
+│   ├── app/                            # Next.js App Router: /, /translate, /novels/..., /api/...
+│   └── lib/                            # Prisma client, tokenizer singleton, scraper + extractors
 ├── packages/
 │   └── tokenizer/                      # production tokenizer module (tested, no npm deps)
 ├── prisma/
@@ -105,24 +113,25 @@ the app exists.
 
 ## Next up
 
-- **Done**: Prisma/Postgres wiring. Neon is live (free tier,
-  ap-southeast-1), `prisma/schema.prisma` is verified against it (`npx
-  prisma migrate dev` applied cleanly), and the migration history is
-  committed under `prisma/migrations/`. See `docs/ARCHITECTURE.md`
-  "Hosting: cloud Postgres free tier — Neon" and "Data split" for what's
-  actually in Postgres now: only `Novel`/`Chapter`/per-novel `Name`
-  overrides, **not** a copy of the bulk dictionary (see below) — no
-  seed-import script needed, and none is planned.
-- **Tokenizer: per-novel override support.** `packages/tokenizer` still
-  only reads `data/seed/dictionary_seed.db` directly, which is correct
-  and stays that way for the bulk dictionary (see "Data split" in
-  `docs/ARCHITECTURE.md` for why it's *not* moving to Postgres). What's
-  still missing: an optional per-novel overrides map, fetched from
-  Postgres's `Name` table in one query per chapter translation (not one
-  query per substring), checked before the SQLite global names/pronouns/
-  words. Not implemented yet.
-- Scaffold the reading library: book-add-by-URL, chapter list, lazy
-  scrape-on-view chapter page, using the generic-extraction-plus-adapters
-  scraping strategy in `docs/ARCHITECTURE.md`.
+- **Done**: Prisma/Postgres wiring, tokenizer per-novel override
+  support (`src/lib/overrides.ts` + `packages/tokenizer`'s `overrides`
+  Map, see `docs/ARCHITECTURE.md` "Data split").
+- **Done, pending one setup step**: the reading library itself --
+  book-add-by-URL, chapter list, lazy scrape-on-view chapter page.
+  `src/lib/extract/` has the generic chapter-list/content extractors
+  (unit-tested against synthetic HTML, unvalidated against any real
+  site yet -- see `docs/ARCHITECTURE.md` "Scraping strategy"),
+  `src/app/api/novels/...` has the API routes, and `/`, `/novels/[slug]`,
+  `/novels/[slug]/chapters/[number]` have the UI. Verified via a dev
+  server smoke test with a fake local site standing in for a real one.
+  **One remaining step before this works end to end**: run
+  `npx prisma generate` again on the real machine to pick up the newly
+  added `binaryTargets` in `prisma/schema.prisma` (needed so the
+  generated client also works from the bridged Linux dev environment,
+  not just Windows) -- see `docs/ARCHITECTURE.md`'s "Scraping strategy"
+  implementation-status note for the full explanation.
+- Try the add-book flow against a real Chinese novel site once one is
+  available (sangtacviet.com was down during this build) and add a
+  per-site adapter if the generic extractor fails on it.
 - Phase 2: implement the `rule.txt`-style grammar-reorder DSL for real
   readability gains beyond phrase substitution (see docs for details).
