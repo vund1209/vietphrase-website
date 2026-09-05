@@ -1,0 +1,30 @@
+# Vendor reference clones used to build the seed dictionary — ~375 MB,
+# reproducible via the `git clone` commands in docs/DICTIONARY_SOURCES.md.
+ref/
+
+# Python
+__pycache__/
+*.pyc
+
+# Node / Next.js (once the app is scaffolded)
+node_modules/
+.next/
+out/
+dist/
+build/
+
+# Prisma
+prisma/migrations/dev.db*
+
+# Env & secrets — never commit real credentials
+.env
+.env.*
+!.env.example
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/
+.idea/

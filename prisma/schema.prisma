@@ -1,0 +1,123 @@
+// Live application schema for the VietPhrase translation site.
+//
+// This is a forward design spec, written before the Next.js app exists,
+// so the data layer is settled before app code gets built on top of it.
+// It mirrors data/seed/dictionary_seed.db (words/names/pronouns/
+// hanviet_fallback/scrape_blacklist) plus the `novels` scoping that seed
+// intentionally doesn't own. See docs/DICTIONARY_SOURCES.md ("Schema v3")
+// for the history of the words/names/pronouns split.
+//
+// Design notes worth knowing before you touch this file:
+//
+// - `Word` / `Pronoun` are bulk, rebuilt-from-source dictionaries. Treat
+//   them as read-only from the app; changes happen by re-importing the
+//   seed data, not through user-facing CRUD.
+// - `Name` is the table users actually curate, scoped per novel via
+//   `novelId`. Global (fallback) names live under one reserved Novel row
+//   (slug "global", seeded once — look it up by slug, don't hardcode its
+//   id) rather than `novelId: null`. A nullable FK + partial unique index
+//   (`WHERE novel_id IS NULL`, as used in the SQLite seed script) would
+//   also work, but Prisma's schema DSL can't express a partial unique
+//   index — you'd have to hand-edit the generated migration SQL every
+//   time and keep that edit from getting silently dropped on the next
+//   `prisma migrate dev`. The sentinel-row approach keeps a single plain
+//   `@@unique([chineseText, novelId])` that Prisma generates natively,
+//   with the same correctness guarantee: one global entry per phrase, one
+//   per-novel override per phrase per novel.
+// - Soft delete (`isActive`) + `updatedAt` + `createdById` live on `Name`
+//   only, since that's the table getting edited row by row. `Word` /
+//   `Pronoun` don't need edit history yet — add it if/when that changes.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// Every novel/story being translated, plus one reserved row (slug
+/// "global") representing "no specific novel" — the fallback scope for
+/// names that aren't overridden per-story.
+model Novel {
+  id        Int      @id @default(autoincrement())
+  slug      String   @unique
+  title     String
+  sourceUrl String?
+  createdAt DateTime @default(now())
+
+  names Name[]
+
+  @@map("novels")
+}
+
+/// Bulk phrase dictionary — the longest-match substitution target during
+/// tokenization. Loaded wholesale from data/seed/dictionary_seed.db;
+/// not edited row-by-row through the app.
+model Word {
+  id             Int      @id @default(autoincrement())
+  chineseText    String   @unique
+  vietnameseText String
+  phraseLength   Int
+  source         String
+  createdAt      DateTime @default(now())
+
+  @@index([phraseLength])
+  @@map("words")
+}
+
+/// Proper nouns — checked before Word during tokenization (higher lookup
+/// priority). The dictionary users actually curate over time, per novel.
+model Name {
+  id             Int      @id @default(autoincrement())
+  chineseText    String
+  vietnameseText String
+  phraseLength   Int
+  novelId        Int
+  novel          Novel    @relation(fields: [novelId], references: [id], onDelete: Cascade)
+  source         String
+  isActive       Boolean  @default(true)
+  createdById    String? // nullable: seed-imported rows have no user author
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([chineseText, novelId])
+  @@index([phraseLength])
+  @@index([novelId])
+  @@map("names")
+}
+
+/// Pronoun substitutions — small, curated, not per-novel scoped (context-
+/// dependent resolution, not identity-dependent like names).
+model Pronoun {
+  id             Int      @id @default(autoincrement())
+  chineseText    String   @unique
+  vietnameseText String
+  phraseLength   Int
+  source         String
+  createdAt      DateTime @default(now())
+
+  @@map("pronouns")
+}
+
+/// Single-character Han-Viet reading — last-resort fallback when no
+/// multi-character match is found in Name, Word, or Pronoun.
+model HanvietFallback {
+  id              Int    @id @default(autoincrement())
+  chineseChar     String @unique
+  hanvietReadings String
+  source          String
+
+  @@map("hanviet_fallback")
+}
+
+/// Line/paragraph patterns to strip from raw scraped chapter text before
+/// it reaches the tokenizer. Not part of translation lookup.
+model ScrapeBlacklistPattern {
+  id      Int    @id @default(autoincrement())
+  pattern String @unique
+  source  String
+
+  @@map("scrape_blacklist")
+}
