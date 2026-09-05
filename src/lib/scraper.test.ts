@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { findTocLink } from "./scraper.ts";
+import { findTocLink, fetchChapterList } from "./scraper.ts";
 
 test("finds a same-origin table-of-contents link by href pattern", () => {
   const html = `
@@ -39,4 +39,53 @@ test("does not return a self-referencing link", () => {
   const html = `<html><body><a href="/book/1">目录</a></body></html>`;
   const result = findTocLink(html, "https://example.com/book/1");
   assert.equal(result, null);
+});
+
+test("fetchChapterList follows the sfacg two-hop via its adapter, merging every volume on the real TOC", async (t) => {
+  // Regression test for the "sfacg-530508" bug: the landing page's
+  // footer/recommended/genre-nav chrome used to false-positive-match as
+  // a chapter list in the generic extractor, so chapters.length > 0
+  // there and the two-hop TOC-follow below never fired. The
+  // book.sfacg.com adapter now reports 0 chapters on the landing page
+  // (no .story-catalog there), which lets the hop reach the real TOC.
+  const landingHtml = `
+    <html><head><title>Some Novel - SF轻小说</title></head><body>
+      <div class="footer">
+        <a href="https://www.sfacg.com/Extending/hire.html">招聘</a>
+        <a href="https://www.sfacg.com/Extending/Announce.html">免责声明</a>
+        <a href="https://www.sfacg.com/Extending/CopyRight.html">版权隐私</a>
+        <a href="https://www.sfacg.com/Extending/ContactUs.html">联系方式</a>
+        <a href="http://www.miibeian.gov.cn/">粤ICP备10062407号</a>
+      </div>
+      <a href="/Novel/530508/MainIndex/">点击阅读</a>
+    </body></html>
+  `;
+  const mainIndexHtml = `
+    <html><body>
+      <div class="story-catalog">
+        <div class="catalog-list">
+          <ul class="clearfix">
+            <li><a href="/Novel/530508/1/1/" title="第一章 初入江湖">第一章 初入江湖</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="story-catalog">
+        <div class="catalog-list">
+          <ul class="clearfix">
+            <li><a href="/vip/c/999/" title="第二章 风起云涌">第二章 风起云涌</a></li>
+          </ul>
+        </div>
+      </div>
+    </body></html>
+  `;
+
+  t.mock.method(globalThis, "fetch", async (url: string) => {
+    const html = url.includes("MainIndex") ? mainIndexHtml : landingHtml;
+    return { ok: true, status: 200, statusText: "OK", text: async () => html } as Response;
+  });
+
+  const result = await fetchChapterList("https://book.sfacg.com/Novel/530508/");
+  assert.equal(result.chapters.length, 2);
+  assert.equal(result.chapters[0].title, "第一章 初入江湖");
+  assert.equal(result.chapters[1].url, "https://book.sfacg.com/vip/c/999/");
 });

@@ -133,18 +133,22 @@ export interface FetchedChapterList {
 export async function fetchChapterList(bookUrl: string): Promise<FetchedChapterList> {
   const html = await fetchHtml(bookUrl);
   const adapter = resolveAdapter(bookUrl);
-  let chapters = adapter
-    ? adapter.getChapterList(html, bookUrl)
-    : extractChapterList(html, bookUrl);
+  const extract = (h: string, u: string) =>
+    adapter ? adapter.getChapterList(h, u) : extractChapterList(h, u);
+  let chapters = extract(html, bookUrl);
 
-  if (chapters.length === 0 && !adapter) {
+  if (chapters.length === 0) {
     // The given URL had no chapter list -- follow the first same-origin
-    // link that looks like a table of contents and try again there
-    // (one hop only, to avoid loops).
+    // link that looks like a table of contents and try again there (one
+    // hop only, to avoid loops). Applies even when an adapter matched:
+    // an adapter can itself report "no chapter list here" (e.g.
+    // book.sfacg.com's landing page vs. its separate MainIndex TOC
+    // page) and still want its own extraction logic used on the page
+    // the hop lands on.
     const tocUrl = findTocLink(html, bookUrl);
     if (tocUrl) {
       const tocHtml = await fetchHtml(tocUrl);
-      const tocChapters = extractChapterList(tocHtml, tocUrl);
+      const tocChapters = extract(tocHtml, tocUrl);
       if (tocChapters.length > 0) {
         chapters = tocChapters;
       }
