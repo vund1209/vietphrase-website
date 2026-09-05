@@ -125,7 +125,10 @@ export function SpanEditor({
   }, [novelSlug, chinese]);
 
   return (
-    <div className="fixed inset-x-0 bottom-0 z-50 max-h-[80vh] overflow-y-auto border-t border-neutral-200 bg-white p-4 shadow-lg dark:border-neutral-800 dark:bg-neutral-900">
+    <div
+      data-span-editor="true"
+      className="fixed inset-x-0 bottom-0 z-50 max-h-[80vh] overflow-y-auto border-t border-neutral-200 bg-white p-4 shadow-lg dark:border-neutral-800 dark:bg-neutral-900"
+    >
       <div className="mx-auto flex max-w-3xl flex-col gap-2">
         <div className="flex items-center justify-between gap-2">
           <button

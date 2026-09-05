@@ -7,7 +7,7 @@
 // per-phrase editor. Saving writes a *private* override for that reader
 // only (see docs/ARCHITECTURE.md "User management and per-word
 // overrides") unless promoted to the shared dictionary.
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { DisplayToken, CapStyle } from "@/lib/tokenizer";
 import { SpanEditor, type ReuseEntry } from "./SpanEditor";
 
@@ -99,6 +99,24 @@ export function ChapterReader({ novelSlug, lines, canPromote }: ChapterReaderPro
     setError(null);
   }
 
+  // Clicking anywhere outside the editor (or another token, which
+  // instead re-seeds the selection via its own onClick) closes it --
+  // matches sangtacviet.com's tooltip, which doesn't need an explicit
+  // Hủy click either. Listens on "mousedown" (fires before "click") so a
+  // click on a token still closes-then-immediately-reopens with the new
+  // selection rather than being swallowed as just a close.
+  useEffect(() => {
+    if (!selection) return;
+    function handlePointerDown(e: MouseEvent) {
+      const target = e.target as Element;
+      if (target.closest("[data-span-editor]") || target.closest("[data-token]")) return;
+      closeEditor();
+    }
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only open/close transitions need to re-attach, not every field/selection change
+  }, [Boolean(selection)]);
+
   function reuseEntry(entry: ReuseEntry) {
     setTranslation(entry.vietnameseText);
     setCapStyle(entry.capStyle);
@@ -181,7 +199,7 @@ export function ChapterReader({ novelSlug, lines, canPromote }: ChapterReaderPro
                   tokenIndex >= selection.start &&
                   tokenIndex <= selection.end;
                 return (
-                  <span key={tokenIndex} className="group relative inline-block">
+                  <span key={tokenIndex} data-token="true" className="group relative inline-block">
                     <span
                       role="button"
                       tabIndex={0}
