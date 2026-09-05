@@ -11,12 +11,25 @@ interface NovelCardProps {
   coverImageUrl: string | null;
   chapterCount: number;
   canDelete: boolean;
+  /** Overrides the default `/novels/${slug}` link target -- e.g. straight to an in-progress chapter. */
+  href?: string;
+  /** Overrides the default "author · N chương" line -- e.g. "Chương 3" for a continue-reading card. */
+  subtitle?: string;
 }
 
-export function NovelCard({ slug, title, author, coverImageUrl, chapterCount, canDelete }: NovelCardProps) {
+export function NovelCard({
+  slug,
+  title,
+  author,
+  coverImageUrl,
+  chapterCount,
+  canDelete,
+  href,
+  subtitle,
+}: NovelCardProps) {
   return (
     <div className="relative flex flex-col gap-2">
-      <Link href={`/novels/${slug}`} className="flex flex-col gap-2">
+      <Link href={href ?? `/novels/${slug}`} className="flex flex-col gap-2">
         <div className="aspect-[2/3] overflow-hidden rounded-md bg-neutral-200 dark:bg-neutral-800">
           {coverImageUrl ? (
             // eslint-disable-next-line @next/next/no-img-element -- arbitrary hotlinked third-party hosts, not in next.config's image allowlist
@@ -25,8 +38,7 @@ export function NovelCard({ slug, title, author, coverImageUrl, chapterCount, ca
         </div>
         <div className="line-clamp-2 text-sm font-medium">{title}</div>
         <div className="text-xs text-neutral-500">
-          {author ? `${author} · ` : ""}
-          {chapterCount} chương
+          {subtitle ?? `${author ? `${author} · ` : ""}${chapterCount} chương`}
         </div>
       </Link>
       {canDelete && (

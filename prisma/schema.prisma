@@ -81,13 +81,23 @@ model Novel {
   sourceUrl     String?
   coverImageUrl String?
   status        NovelStatus @default(PENDING)
+  // Admin-set only (null = unknown) -- unlike description/cover/author,
+  // there's no reliable generic <meta> signal for this across arbitrary
+  // sites, so it's not auto-scraped.
+  completionStatus NovelCompletionStatus?
   createdAt     DateTime    @default(now())
 
   names             Name[]
   chapters          Chapter[]
   userWordOverrides UserWordOverride[]
+  readingProgress   ReadingProgress[]
 
   @@map("novels")
+}
+
+enum NovelCompletionStatus {
+  ONGOING
+  COMPLETED
 }
 
 enum NovelStatus {
@@ -224,4 +234,23 @@ model UserWordOverride {
   @@unique([userId, novelId, chineseText])
   @@index([novelId, phraseLength])
   @@map("user_word_overrides")
+}
+
+/// Per-browser "continue reading" position for one novel. Deliberately
+/// keyed on an opaque `readerId` (a cookie value, see src/lib/readerId.ts)
+/// rather than a User FK: this is a small, few-people app where more than
+/// one physical person can share one login, so tying progress to the
+/// account would make everyone using that login collide on the same
+/// position. Works the same for signed-in and anonymous readers.
+model ReadingProgress {
+  id            Int      @id @default(autoincrement())
+  readerId      String
+  novelId       Int
+  novel         Novel    @relation(fields: [novelId], references: [id], onDelete: Cascade)
+  chapterNumber Int
+  updatedAt     DateTime @updatedAt
+
+  @@unique([readerId, novelId])
+  @@index([readerId])
+  @@map("reading_progress")
 }

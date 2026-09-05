@@ -75,3 +75,14 @@ export function translateText(text: string, overrides?: Map<string, string>): st
     .map((line) => line.map((t) => t.vietnamese).join(" "))
     .join("\n");
 }
+
+/**
+ * Full Sino-Vietnamese (Hán Việt) reading of a string, e.g. for showing
+ * a novel's original title alongside its VietPhrase translation. Same
+ * shape as translateText, joining hanViet instead of vietnamese.
+ */
+export function hanVietOf(text: string, overrides?: Map<string, string>): string {
+  return tokenizeLines(text, overrides)
+    .map((line) => line.map((t) => t.hanViet).join(" "))
+    .join("\n");
+}

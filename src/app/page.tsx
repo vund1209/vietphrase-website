@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { auth, isAdmin } from "@/lib/auth";
+import { getReaderId } from "@/lib/readerId";
 import { AddBookForm } from "./AddBookForm";
 import { NovelCard } from "@/components/NovelCard";
 
@@ -9,12 +10,21 @@ import { NovelCard } from "@/components/NovelCard";
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
-  const [novels, session] = await Promise.all([
+  const readerId = await getReaderId();
+  const [novels, session, inProgress] = await Promise.all([
     prisma.novel.findMany({
       orderBy: { createdAt: "desc" },
       include: { _count: { select: { chapters: true } } },
     }),
     auth(),
+    readerId
+      ? prisma.readingProgress.findMany({
+          where: { readerId },
+          orderBy: { updatedAt: "desc" },
+          take: 6,
+          include: { novel: { include: { _count: { select: { chapters: true } } } } },
+        })
+      : Promise.resolve([]),
   ]);
   const canDelete = isAdmin(session?.user?.role);
 
@@ -38,6 +48,27 @@ export default async function HomePage() {
           Dán văn bản tiếng Trung, nhận bản dịch VietPhrase ngay lập tức.
         </div>
       </Link>
+
+      {inProgress.length > 0 && (
+        <section className="flex flex-col gap-3">
+          <h2 className="text-lg font-medium">Tiếp tục đọc</h2>
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
+            {inProgress.map((p) => (
+              <NovelCard
+                key={p.novel.slug}
+                slug={p.novel.slug}
+                title={p.novel.title}
+                author={p.novel.author}
+                coverImageUrl={p.novel.coverImageUrl}
+                chapterCount={p.novel._count.chapters}
+                canDelete={false}
+                href={`/novels/${p.novel.slug}/chapters/${p.chapterNumber}`}
+                subtitle={`Chương ${p.chapterNumber}`}
+              />
+            ))}
+          </div>
+        </section>
+      )}
 
       <section className="flex flex-col gap-3">
         <h2 className="text-lg font-medium">Thêm truyện mới</h2>

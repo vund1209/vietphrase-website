@@ -8,6 +8,7 @@ import {
   getOrTranslateChapter,
 } from "@/lib/novels";
 import { ChapterReader } from "@/components/ChapterReader";
+import { ReadingProgressPing } from "@/components/ReadingProgressPing";
 
 // Library/reader pages show live, per-request data (novels/chapters get
 // added and translated at runtime) -- never statically prerender these.
@@ -52,6 +53,7 @@ export default async function ChapterPage({
 
   return (
     <main className="mx-auto flex max-w-3xl flex-1 flex-col gap-4 p-6">
+      <ReadingProgressPing novelSlug={slug} chapterNumber={chapterNumber} />
       <div className="flex items-center justify-between text-sm text-neutral-500">
         <Link href={`/novels/${slug}`} className="hover:underline">
           ← {novel.title}
