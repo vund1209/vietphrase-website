@@ -12,6 +12,7 @@
 // around a site rather than reading one page at a time.
 import Link from "next/link";
 import { useState } from "react";
+import { BookOpen, Globe } from "@phosphor-icons/react";
 
 interface SurfResult {
   title: string | null;
@@ -50,46 +51,53 @@ export default function SurfPage() {
   }
 
   return (
-    <main className="mx-auto flex max-w-3xl flex-1 flex-col gap-4 p-6">
-      <h1 className="text-2xl font-semibold">Đọc web</h1>
-      <p className="text-sm text-neutral-500">
-        Dán URL một trang chương/nội dung tiếng Trung để xem bản dịch ngay -- không lưu lại, khác
-        với &quot;Thêm truyện&quot; ở trang chủ (lưu cả truyện lâu dài). Trang nào có chặn bot chặt
-        chẽ có thể không lấy được nội dung.
-      </p>
+    <main className="mx-auto flex max-w-3xl flex-1 flex-col gap-5 p-6">
+      <div className="flex flex-col gap-1">
+        <h1 className="font-display text-3xl font-semibold">Đọc web</h1>
+        <p className="text-sm text-muted-foreground">
+          Dán URL một trang chương/nội dung tiếng Trung -- không lưu lại, khác với &quot;Thêm
+          truyện&quot; ở trang chủ (lưu cả truyện lâu dài). Trang nào có chặn bot chặt chẽ có thể
+          không lấy được nội dung.
+        </p>
+      </div>
 
-      <div className="flex gap-2">
-        <input
-          type="url"
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          placeholder="https://.../chuong-1"
-          className="flex-1 rounded-md border border-neutral-300 px-3 py-2 dark:border-neutral-700 dark:bg-neutral-900"
-        />
+      <input
+        type="url"
+        value={url}
+        onChange={(e) => setUrl(e.target.value)}
+        placeholder="https://.../chuong-1"
+        className="rounded-md border border-border bg-card px-3 py-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      />
+
+      <div className="grid gap-3 sm:grid-cols-2">
         <button
           type="button"
           onClick={handleSurf}
           disabled={loading || !url.trim()}
-          className="rounded-md bg-neutral-900 px-4 py-2 text-white disabled:opacity-40 dark:bg-white dark:text-neutral-900"
+          className="flex cursor-pointer flex-col items-start gap-2 rounded-lg border border-border bg-card p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-sm"
         >
-          {loading ? "Đang tải..." : "Xem"}
+          <Globe size={22} className="text-accent" weight="duotone" />
+          <span className="font-medium">{loading ? "Đang tải..." : "Xem"}</span>
+          <span className="text-xs text-muted-foreground">
+            Bản dịch dạng văn bản, xem nhanh một trang.
+          </span>
         </button>
         <Link
           href={url.trim() ? `/surf/browse?url=${encodeURIComponent(url.trim())}` : "#"}
           aria-disabled={!url.trim()}
-          className={`rounded-md border border-neutral-300 px-4 py-2 dark:border-neutral-700 ${
-            !url.trim() ? "pointer-events-none opacity-40" : ""
+          className={`flex flex-col items-start gap-2 rounded-lg border border-border bg-card p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md ${
+            !url.trim() ? "pointer-events-none opacity-50" : ""
           }`}
         >
-          Duyệt như trang gốc
+          <BookOpen size={22} className="text-accent" weight="duotone" />
+          <span className="font-medium">Duyệt như trang gốc</span>
+          <span className="text-xs text-muted-foreground">
+            Bấm liên kết, mục lục, chương -- điều hướng như trang thật.
+          </span>
         </Link>
       </div>
-      <p className="text-xs text-neutral-400">
-        &quot;Duyệt như trang gốc&quot; mở một bản sao có thể bấm liên kết (menu, mục lục, chương) --
-        chỉ điều hướng, không có tính năng tương tác phức tạp (tìm kiếm, đăng nhập...).
-      </p>
 
-      <label className="flex items-center gap-2 text-sm text-neutral-500">
+      <label className="flex items-center gap-2 text-sm text-muted-foreground">
         <input
           type="checkbox"
           checked={skipTranslate}
@@ -98,11 +106,11 @@ export default function SurfPage() {
         Không dịch, chỉ xem nguyên bản
       </label>
 
-      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+      {error && <p className="text-sm text-destructive">{error}</p>}
 
       {result && (
-        <article className="prose-reading mt-2 text-lg">
-          {result.title && <h2 className="mb-4 text-xl font-semibold">{result.title}</h2>}
+        <article className="prose-reading mt-2 rounded-lg border border-border bg-card p-6 text-lg">
+          {result.title && <h2 className="mb-4 font-display text-xl font-semibold">{result.title}</h2>}
           {result.content.split("\n").map((line, i) => (
             <p key={i}>{line || " "}</p>
           ))}

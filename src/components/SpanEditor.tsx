@@ -9,6 +9,8 @@
 // personal-vs-shared write paths this calls into.
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { motion } from "framer-motion";
+import { ArrowDown, ArrowUp, CaretLeft, CaretRight, Copy, X } from "@phosphor-icons/react";
 import type { CapStyle } from "@/lib/tokenizer";
 
 export interface ReuseEntry {
@@ -129,9 +131,13 @@ export function SpanEditor({
   }, [novelSlug, chinese]);
 
   return (
-    <div
+    <motion.div
       data-span-editor="true"
-      className="fixed inset-x-0 bottom-0 z-50 max-h-[80vh] overflow-y-auto border-t border-neutral-200 bg-white p-4 shadow-lg dark:border-neutral-800 dark:bg-neutral-900"
+      initial={{ y: "100%" }}
+      animate={{ y: 0 }}
+      exit={{ y: "100%" }}
+      transition={{ duration: 0.25, ease: "easeOut" }}
+      className="fixed inset-x-0 bottom-0 z-50 max-h-[80vh] overflow-y-auto rounded-t-xl border-t border-border bg-card p-4 shadow-lg"
     >
       <div className="mx-auto flex max-w-3xl flex-col gap-2">
         <div className="flex items-center justify-between gap-2">
@@ -139,100 +145,98 @@ export function SpanEditor({
             type="button"
             onClick={onExpandLeft}
             disabled={!canExpandLeft}
-            className="rounded-md border border-neutral-300 px-2 py-1 text-sm disabled:opacity-30 dark:border-neutral-700"
+            className="flex cursor-pointer items-center gap-1 rounded-md border border-border px-2 py-1 text-sm disabled:cursor-not-allowed disabled:opacity-30"
           >
-            ← Mở rộng
+            <CaretLeft size={14} /> Mở rộng
           </button>
-          <span className="text-xs text-neutral-500">
+          <span className="text-xs text-muted-foreground">
             Chọn nhiều chữ liền nhau để tạo cụm từ điển mới
           </span>
           <button
             type="button"
             onClick={onExpandRight}
             disabled={!canExpandRight}
-            className="rounded-md border border-neutral-300 px-2 py-1 text-sm disabled:opacity-30 dark:border-neutral-700"
+            className="flex cursor-pointer items-center gap-1 rounded-md border border-border px-2 py-1 text-sm disabled:cursor-not-allowed disabled:opacity-30"
           >
-            Mở rộng →
+            Mở rộng <CaretRight size={14} />
           </button>
         </div>
 
         <div className="grid grid-cols-[2.5rem_1fr] items-center gap-x-2 gap-y-1 text-sm">
-          <span className="text-neutral-500">zw</span>
+          <span className="text-muted-foreground">zw</span>
           <span className="flex items-center gap-2">
             <span className="font-medium">{chinese}</span>
             <button
               type="button"
               onClick={() => navigator.clipboard?.writeText(chinese)}
-              className="text-xs text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200"
+              className="cursor-pointer text-muted-foreground hover:text-foreground"
               title="Sao chép"
             >
-              ⧉
+              <Copy size={14} />
             </button>
           </span>
 
-          <label htmlFor="span-editor-hv" className="text-neutral-500">
+          <label htmlFor="span-editor-hv" className="text-muted-foreground">
             hv
           </label>
           <input
             id="span-editor-hv"
             value={hanViet}
             onChange={(e) => onHanVietChange(e.target.value)}
-            className="rounded-md border border-neutral-300 px-2 py-1 dark:border-neutral-700 dark:bg-neutral-950"
+            className="rounded-md border border-border bg-background px-2 py-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           />
 
-          <label htmlFor="span-editor-hv-cap" className="text-neutral-500">
+          <label htmlFor="span-editor-hv-cap" className="text-muted-foreground">
             HV
           </label>
           <input
             id="span-editor-hv-cap"
             value={hanVietCapitalized}
             onChange={(e) => onHanVietCapitalizedChange(e.target.value)}
-            className="rounded-md border border-neutral-300 px-2 py-1 dark:border-neutral-700 dark:bg-neutral-950"
+            className="rounded-md border border-border bg-background px-2 py-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           />
         </div>
 
         <div className="flex flex-col gap-1 text-sm">
-          <span className="text-neutral-500">Tr (các bản dịch, đầu tiên là mặc định)</span>
+          <span className="text-muted-foreground">Tr (các bản dịch, đầu tiên là mặc định)</span>
           {candidates.length === 0 && (
-            <span className="text-xs text-neutral-400">Chưa có bản dịch nào.</span>
+            <span className="text-xs text-muted-foreground">Chưa có bản dịch nào.</span>
           )}
           {candidates.map((candidate, i) => (
             <div key={i} className="flex items-center gap-1">
-              <span className="w-5 shrink-0 text-xs text-neutral-400">{i + 1}.</span>
+              <span className="w-5 shrink-0 text-xs text-muted-foreground">{i + 1}.</span>
               <input
                 value={candidate}
                 onChange={(e) => updateCandidate(i, e.target.value)}
-                className={`flex-1 rounded-md border px-2 py-1 dark:bg-neutral-950 ${
-                  i === 0
-                    ? "border-neutral-400 font-medium dark:border-neutral-500"
-                    : "border-neutral-300 dark:border-neutral-700"
+                className={`flex-1 rounded-md border bg-background px-2 py-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+                  i === 0 ? "border-secondary font-medium" : "border-border"
                 }`}
               />
               <button
                 type="button"
                 onClick={() => moveCandidate(i, -1)}
                 disabled={i === 0}
-                className="px-1 text-neutral-400 disabled:opacity-30"
+                className="cursor-pointer px-1 text-muted-foreground disabled:cursor-not-allowed disabled:opacity-30"
                 title="Đưa lên"
               >
-                ↑
+                <ArrowUp size={14} />
               </button>
               <button
                 type="button"
                 onClick={() => moveCandidate(i, 1)}
                 disabled={i === candidates.length - 1}
-                className="px-1 text-neutral-400 disabled:opacity-30"
+                className="cursor-pointer px-1 text-muted-foreground disabled:cursor-not-allowed disabled:opacity-30"
                 title="Đưa xuống"
               >
-                ↓
+                <ArrowDown size={14} />
               </button>
               <button
                 type="button"
                 onClick={() => removeCandidate(i)}
-                className="px-1 text-red-500"
+                className="cursor-pointer px-1 text-destructive"
                 title="Xóa"
               >
-                ×
+                <X size={14} />
               </button>
             </div>
           ))}
@@ -248,12 +252,12 @@ export function SpanEditor({
                 }
               }}
               placeholder="Thêm bản dịch khác…"
-              className="flex-1 rounded-md border border-dashed border-neutral-300 px-2 py-1 dark:border-neutral-700 dark:bg-neutral-950"
+              className="flex-1 rounded-md border border-dashed border-border bg-background px-2 py-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             />
             <button
               type="button"
               onClick={addCandidate}
-              className="rounded-md border border-neutral-300 px-2 py-1 text-xs dark:border-neutral-700"
+              className="cursor-pointer rounded-md border border-border px-2 py-1 text-xs hover:bg-muted"
             >
               + Thêm
             </button>
@@ -261,16 +265,16 @@ export function SpanEditor({
         </div>
 
         <div className="flex items-center gap-2 text-sm">
-          <span className="text-neutral-500">Kiểu viết hoa</span>
+          <span className="text-muted-foreground">Kiểu viết hoa</span>
           {(Object.keys(CAP_STYLE_LABEL) as CapStyle[]).map((style) => (
             <button
               key={style}
               type="button"
               onClick={() => onCapStyleChange(style)}
-              className={`rounded-md border px-2 py-1 text-xs ${
+              className={`cursor-pointer rounded-md border px-2 py-1 text-xs transition-colors ${
                 capStyle === style
-                  ? "border-neutral-900 bg-neutral-900 text-white dark:border-neutral-100 dark:bg-neutral-100 dark:text-neutral-900"
-                  : "border-neutral-300 dark:border-neutral-700"
+                  ? "border-secondary bg-secondary text-white dark:text-neutral-900"
+                  : "border-border hover:bg-muted"
               }`}
             >
               {CAP_STYLE_LABEL[style]}
@@ -280,11 +284,11 @@ export function SpanEditor({
 
         {reuseEntries.length > 0 && (
           <div className="flex flex-col gap-1 text-xs">
-            <span className="text-neutral-500">Name trong kho</span>
+            <span className="text-muted-foreground">Name trong kho</span>
             {reuseEntries.map((entry) => (
               <div
                 key={entry.chineseText}
-                className="flex items-center justify-between gap-2 rounded-md border border-neutral-200 px-2 py-1 dark:border-neutral-800"
+                className="flex items-center justify-between gap-2 rounded-md border border-border px-2 py-1"
               >
                 <span className="truncate">
                   {entry.chineseText} → {entry.vietnameseText.split("/")[0]}
@@ -292,7 +296,7 @@ export function SpanEditor({
                 <button
                   type="button"
                   onClick={() => onReuseEntry(entry)}
-                  className="shrink-0 rounded-md border border-neutral-300 px-2 py-0.5 dark:border-neutral-700"
+                  className="shrink-0 cursor-pointer rounded-md border border-border px-2 py-0.5 hover:bg-muted"
                 >
                   Dùng
                 </button>
@@ -306,7 +310,7 @@ export function SpanEditor({
             type="button"
             onClick={onSavePersonal}
             disabled={saving}
-            className="rounded-md bg-neutral-900 px-3 py-2 text-white disabled:opacity-50 dark:bg-neutral-100 dark:text-neutral-900"
+            className="cursor-pointer rounded-md bg-secondary px-3 py-2 text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 dark:text-neutral-900"
           >
             {saving ? "Đang lưu…" : "Lưu riêng"}
           </button>
@@ -315,7 +319,7 @@ export function SpanEditor({
               type="button"
               onClick={onPromote}
               disabled={saving}
-              className="rounded-md border border-neutral-300 px-3 py-2 disabled:opacity-50 dark:border-neutral-700"
+              className="cursor-pointer rounded-md border border-border px-3 py-2 disabled:cursor-not-allowed disabled:opacity-50 hover:bg-muted"
             >
               Thêm vào từ điển chung
             </button>
@@ -325,7 +329,7 @@ export function SpanEditor({
               type="button"
               onClick={onApplyGlobal}
               disabled={saving}
-              className="rounded-md border border-amber-400 px-3 py-2 text-amber-700 disabled:opacity-50 dark:border-amber-700 dark:text-amber-400"
+              className="cursor-pointer rounded-md border border-accent px-3 py-2 text-accent disabled:cursor-not-allowed disabled:opacity-50 hover:bg-accent/10"
               title="Áp dụng cho mọi truyện, không chỉ truyện này"
             >
               Áp dụng cho tất cả truyện
@@ -333,24 +337,24 @@ export function SpanEditor({
           )}
           <Link
             href={`/novels/${novelSlug}/overrides`}
-            className="rounded-md border border-neutral-300 px-3 py-2 text-sm dark:border-neutral-700"
+            className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted"
           >
             Quản lý
           </Link>
           <button
             type="button"
             onClick={onClose}
-            className="ml-auto rounded-md border border-neutral-300 px-3 py-2 dark:border-neutral-700"
+            className="ml-auto cursor-pointer rounded-md border border-border px-3 py-2 hover:bg-muted"
           >
             Hủy
           </button>
         </div>
-        <p className="text-xs text-neutral-400">
+        <p className="text-xs text-muted-foreground">
           Cụm dài hơn tạo một mục từ điển riêng, không xóa các mục ngắn hơn -- chúng vẫn áp dụng ở
           nơi khác.
         </p>
-        {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+        {error && <p className="text-sm text-destructive">{error}</p>}
       </div>
-    </div>
+    </motion.div>
   );
 }

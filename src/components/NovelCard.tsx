@@ -30,24 +30,27 @@ export function NovelCard({
   description,
 }: NovelCardProps) {
   return (
-    <div className="relative flex flex-col gap-2">
-      <Link href={href ?? `/novels/${slug}`} className="flex flex-col gap-2">
-        <div className="aspect-[2/3] overflow-hidden rounded-md bg-neutral-200 dark:bg-neutral-800">
+    <div className="group relative flex flex-col gap-2">
+      <Link
+        href={href ?? `/novels/${slug}`}
+        className="flex flex-col gap-2 rounded-lg motion-safe:transition-transform motion-safe:duration-200 motion-safe:group-hover:-translate-y-0.5 motion-safe:active:scale-[0.98]"
+      >
+        <div className="aspect-[2/3] overflow-hidden rounded-lg bg-muted shadow-sm transition-shadow group-hover:shadow-md">
           {coverImageUrl ? (
             // eslint-disable-next-line @next/next/no-img-element -- arbitrary hotlinked third-party hosts, not in next.config's image allowlist
             <img src={coverImageUrl} alt="" className="h-full w-full object-cover" />
           ) : null}
         </div>
         <div className="line-clamp-2 text-sm font-medium">{title}</div>
-        <div className="text-xs text-neutral-500">
+        <div className="text-xs text-muted-foreground">
           {subtitle ?? `${author ? `${author} · ` : ""}${chapterCount} chương`}
         </div>
         {description && (
-          <div className="line-clamp-3 text-xs text-neutral-500">{description}</div>
+          <div className="line-clamp-3 text-xs text-muted-foreground">{description}</div>
         )}
       </Link>
       {canDelete && (
-        <div className="absolute top-1 right-1 rounded-md bg-white/90 backdrop-blur-sm dark:bg-neutral-900/90">
+        <div className="absolute top-1 right-1 rounded-md bg-card/90 backdrop-blur-sm">
           <DeleteNovelButton novelSlug={slug} novelTitle={title} />
         </div>
       )}

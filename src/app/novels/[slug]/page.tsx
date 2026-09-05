@@ -1,13 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ArrowLeft, BookOpen } from "@phosphor-icons/react/dist/ssr";
 import { getNovelBySlug } from "@/lib/novels";
 import { auth, isAdmin } from "@/lib/auth";
 import { getReadingProgress } from "@/lib/readerId";
 import { hanVietOf } from "@/lib/tokenizer";
-import { DeleteNovelButton } from "@/components/DeleteNovelButton";
 import { CompletionStatusToggle } from "@/components/CompletionStatusToggle";
-import { RefreshMetadataButton } from "@/components/RefreshMetadataButton";
-import { CheckNewChaptersButton } from "@/components/CheckNewChaptersButton";
+import { AdminActionsMenu } from "@/components/AdminActionsMenu";
 
 const COMPLETION_LABEL: Record<string, string> = {
   ONGOING: "Đang tiến hành",
@@ -39,38 +38,42 @@ export default async function NovelPage({
 
   return (
     <main className="mx-auto flex max-w-3xl flex-1 flex-col gap-6 p-6">
-      <div className="flex gap-4">
+      <div className="flex gap-5">
         {novel.coverImageUrl && (
           // eslint-disable-next-line @next/next/no-img-element -- arbitrary hotlinked third-party hosts, not in next.config's image allowlist
           <img
             src={novel.coverImageUrl}
             alt=""
-            className="h-40 w-28 shrink-0 rounded object-cover"
+            className="h-48 w-32 shrink-0 rounded-lg object-cover shadow-md"
           />
         )}
         <div className="flex-1">
-          <Link href="/" className="text-sm text-neutral-500 hover:underline">
-            ← Thư viện
+          <Link
+            href="/"
+            className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+          >
+            <ArrowLeft size={14} /> Thư viện
           </Link>
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-semibold">{novel.title}</h1>
-            {novel.completionStatus && (
-              <span className="shrink-0 rounded-md bg-neutral-200 px-2 py-0.5 text-xs dark:bg-neutral-800">
-                {COMPLETION_LABEL[novel.completionStatus]}
-              </span>
-            )}
+          <div className="mt-1 flex items-start justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <h1 className="font-display text-2xl font-semibold">{novel.title}</h1>
+              {novel.completionStatus && (
+                <span className="shrink-0 rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
+                  {COMPLETION_LABEL[novel.completionStatus]}
+                </span>
+              )}
+            </div>
+            {canDelete && <AdminActionsMenu novelSlug={novel.slug} novelTitle={novel.title} />}
           </div>
           {canDelete && (
             <CompletionStatusToggle novelSlug={novel.slug} current={novel.completionStatus} />
           )}
 
           {novel.description && (
-            <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-300">
-              {novel.description}
-            </p>
+            <p className="mt-2 text-sm text-muted-foreground">{novel.description}</p>
           )}
 
-          <dl className="mt-2 grid grid-cols-[max-content_1fr] gap-x-3 gap-y-1 text-sm text-neutral-500">
+          <dl className="mt-2 grid grid-cols-[max-content_1fr] gap-x-3 gap-y-1 text-sm text-muted-foreground">
             {novel.originalTitle && novel.originalTitle !== novel.title && (
               <>
                 <dt className="shrink-0">Nguyên tác</dt>
@@ -99,45 +102,38 @@ export default async function NovelPage({
             <dd>{firstAppear}</dd>
           </dl>
 
-          <div className="mt-2 flex flex-wrap items-center gap-4">
-            <Link href={`/novels/${novel.slug}/overrides`} className="text-sm underline">
-              Từ đã sửa của bạn
-            </Link>
-            {canDelete && (
-              <>
-                <RefreshMetadataButton novelSlug={novel.slug} />
-                <CheckNewChaptersButton novelSlug={novel.slug} />
-                <DeleteNovelButton novelSlug={novel.slug} novelTitle={novel.title} redirectTo="/" />
-              </>
-            )}
-          </div>
+          <Link
+            href={`/novels/${novel.slug}/overrides`}
+            className="mt-2 inline-block text-sm underline"
+          >
+            Từ đã sửa của bạn
+          </Link>
         </div>
       </div>
 
       {novel.chapters.length > 0 && (
         <Link
           href={`/novels/${novel.slug}/chapters/${progress?.chapterNumber ?? 1}`}
-          className="rounded-md bg-neutral-900 px-4 py-3 text-center font-medium text-white dark:bg-neutral-100 dark:text-neutral-900"
+          className="flex items-center justify-center gap-2 rounded-lg bg-secondary px-4 py-3 text-center font-medium text-white transition-opacity hover:opacity-90 dark:text-neutral-900"
         >
+          <BookOpen size={18} weight="fill" />
           {progress ? `Tiếp tục đọc — Chương ${progress.chapterNumber}` : "Bắt đầu đọc — Chương 1"}
         </Link>
       )}
 
-      <ul className="flex flex-col divide-y divide-neutral-200 dark:divide-neutral-800">
+      <ul className="flex flex-col divide-y divide-border">
         {novel.chapters.map((chapter) => (
           <li key={chapter.chapterNumber}>
             <Link
               href={`/novels/${novel.slug}/chapters/${chapter.chapterNumber}`}
-              className="flex items-center justify-between gap-4 py-3 hover:bg-neutral-50 dark:hover:bg-neutral-900"
+              className="flex items-center justify-between gap-4 rounded-md px-2 py-3 transition-colors hover:bg-muted"
             >
               <span>
                 Chương {chapter.chapterNumber}: {chapter.title}
               </span>
-              <span className="flex shrink-0 items-center gap-2 text-xs text-neutral-400">
+              <span className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
                 {progress?.chapterNumber === chapter.chapterNumber && (
-                  <span className="rounded-md bg-neutral-200 px-1.5 py-0.5 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300">
-                    Đang đọc
-                  </span>
+                  <span className="rounded-full bg-muted px-1.5 py-0.5 font-medium">Đang đọc</span>
                 )}
                 {STATUS_LABEL[chapter.status] ?? chapter.status}
               </span>

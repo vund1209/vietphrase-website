@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { CaretLeft, CaretRight } from "@phosphor-icons/react/dist/ssr";
 import { auth, isEditorOrAdmin, isAdmin } from "@/lib/auth";
 import {
   ChapterNotFoundError,
@@ -38,10 +39,10 @@ export default async function ChapterPage({
     if (!(err instanceof ScrapeFailedError)) throw err;
     return (
       <main className="mx-auto flex max-w-3xl flex-1 flex-col gap-4 p-6">
-        <Link href={`/novels/${slug}`} className="text-sm text-neutral-500 hover:underline">
+        <Link href={`/novels/${slug}`} className="text-sm text-muted-foreground hover:underline">
           ← {novel.title}
         </Link>
-        <div className="rounded-md border border-red-300 bg-red-50 p-4 text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-300">
+        <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-destructive">
           Không thể lấy nội dung chương này: {err.message}
         </div>
       </main>
@@ -55,8 +56,8 @@ export default async function ChapterPage({
   return (
     <main className="mx-auto flex max-w-3xl flex-1 flex-col gap-4 p-6">
       <ReadingProgressPing novelSlug={slug} chapterNumber={chapterNumber} />
-      <div className="flex items-center justify-between text-sm text-neutral-500">
-        <Link href={`/novels/${slug}`} className="hover:underline">
+      <div className="sticky top-0 z-10 -mx-6 flex items-center justify-between bg-background/90 px-6 py-2 text-sm text-muted-foreground backdrop-blur-sm">
+        <Link href={`/novels/${slug}`} className="hover:text-foreground hover:underline">
           ← {novel.title}
         </Link>
         <span>
@@ -65,7 +66,7 @@ export default async function ChapterPage({
       </div>
 
       <div className="flex items-center justify-between gap-2">
-        <h1 className="text-xl font-semibold">
+        <h1 className="font-display text-xl font-semibold">
           Chương {chapterNumber}: {result.chapter.title}
         </h1>
         {isAdmin(session?.user?.role) && (
@@ -87,13 +88,13 @@ export default async function ChapterPage({
         </article>
       )}
 
-      <div className="flex items-center justify-between border-t border-neutral-200 pt-4 dark:border-neutral-800">
+      <div className="flex items-center justify-between border-t border-border pt-4">
         {hasPrev ? (
           <Link
             href={`/novels/${slug}/chapters/${chapterNumber - 1}`}
-            className="text-sm hover:underline"
+            className="flex items-center gap-1 rounded-md px-3 py-2 text-sm transition-colors hover:bg-muted"
           >
-            ← Chương trước
+            <CaretLeft size={14} /> Chương trước
           </Link>
         ) : (
           <span />
@@ -101,9 +102,9 @@ export default async function ChapterPage({
         {hasNext ? (
           <Link
             href={`/novels/${slug}/chapters/${chapterNumber + 1}`}
-            className="text-sm hover:underline"
+            className="flex items-center gap-1 rounded-md px-3 py-2 text-sm transition-colors hover:bg-muted"
           >
-            Chương sau →
+            Chương sau <CaretRight size={14} />
           </Link>
         ) : (
           <span />

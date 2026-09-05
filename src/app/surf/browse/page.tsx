@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ArrowLeft, Translate } from "@phosphor-icons/react/dist/ssr";
 import { fetchRawHtml } from "@/lib/browserFetch";
 import { buildProxyPage } from "@/lib/htmlProxy";
 import { isSafePublicUrl } from "@/lib/urlSafety";
@@ -21,20 +22,20 @@ export default async function BrowsePage({
   if (!url) {
     return (
       <main className="mx-auto flex max-w-3xl flex-1 flex-col gap-4 p-6">
-        <Link href="/surf" className="text-sm text-neutral-500 hover:underline">
-          ← Đọc web
+        <Link href="/surf" className="flex items-center gap-1 text-sm text-muted-foreground hover:underline">
+          <ArrowLeft size={14} /> Đọc web
         </Link>
-        <p className="text-red-600 dark:text-red-400">Thiếu tham số url.</p>
+        <p className="text-destructive">Thiếu tham số url.</p>
       </main>
     );
   }
   if (!isSafePublicUrl(url)) {
     return (
       <main className="mx-auto flex max-w-3xl flex-1 flex-col gap-4 p-6">
-        <Link href="/surf" className="text-sm text-neutral-500 hover:underline">
-          ← Đọc web
+        <Link href="/surf" className="flex items-center gap-1 text-sm text-muted-foreground hover:underline">
+          <ArrowLeft size={14} /> Đọc web
         </Link>
-        <p className="text-red-600 dark:text-red-400">
+        <p className="text-destructive">
           URL không hợp lệ (chỉ chấp nhận địa chỉ công khai http/https).
         </p>
       </main>
@@ -48,10 +49,10 @@ export default async function BrowsePage({
   } catch (err) {
     return (
       <main className="mx-auto flex max-w-3xl flex-1 flex-col gap-4 p-6">
-        <Link href="/surf" className="text-sm text-neutral-500 hover:underline">
-          ← Đọc web
+        <Link href="/surf" className="flex items-center gap-1 text-sm text-muted-foreground hover:underline">
+          <ArrowLeft size={14} /> Đọc web
         </Link>
-        <p className="text-red-600 dark:text-red-400">
+        <p className="text-destructive">
           Không tải được trang này: {err instanceof Error ? err.message : "lỗi không rõ"}
         </p>
       </main>
@@ -62,21 +63,25 @@ export default async function BrowsePage({
 
   return (
     <main className="mx-auto flex max-w-4xl flex-1 flex-col gap-3 p-6">
-      <div className="flex items-center justify-between gap-4 text-sm text-neutral-500">
-        <Link href="/surf" className="hover:underline">
-          ← Đọc web
+      <div className="flex items-center justify-between gap-4 rounded-lg border border-border bg-card px-4 py-2 text-sm text-muted-foreground">
+        <Link href="/surf" className="flex shrink-0 items-center gap-1 hover:text-foreground hover:underline">
+          <ArrowLeft size={14} /> Đọc web
         </Link>
-        <div className="flex items-center gap-3">
+        <div className="flex min-w-0 items-center gap-3">
           <span className="truncate" title={url}>
             {url}
           </span>
-          <Link href={toggleTranslateHref} className="shrink-0 rounded-md border border-neutral-300 px-2 py-1 dark:border-neutral-700">
+          <Link
+            href={toggleTranslateHref}
+            className="flex shrink-0 items-center gap-1 rounded-md border border-border px-2 py-1 transition-colors hover:bg-muted"
+          >
+            <Translate size={14} />
             {translate ? "Xem nguyên bản" : "Dịch"}
           </Link>
         </div>
       </div>
       <div
-        className="prose-reading"
+        className="prose-reading rounded-lg border border-dashed border-border bg-card p-6"
         // Safe: buildProxyPage strips <script>, inline event-handler
         // attributes, and javascript: URLs before this ever renders --
         // see src/lib/htmlProxy.ts. This is the one place in the app

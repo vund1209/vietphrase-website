@@ -1,9 +1,11 @@
 import Link from "next/link";
+import { Translate } from "@phosphor-icons/react/dist/ssr";
 import { prisma } from "@/lib/prisma";
 import { auth, isAdmin } from "@/lib/auth";
 import { getReaderId } from "@/lib/readerId";
 import { AddBookForm } from "./AddBookForm";
 import { NovelCard } from "@/components/NovelCard";
+import { NovelGrid } from "@/components/NovelGrid";
 
 // Library/reader pages show live, per-request data (novels/chapters get
 // added and translated at runtime) -- never statically prerender these.
@@ -29,30 +31,33 @@ export default async function HomePage() {
   const canDelete = isAdmin(session?.user?.role);
 
   return (
-    <main className="mx-auto flex max-w-3xl flex-1 flex-col gap-6 p-6">
-      <h1 className="text-2xl font-semibold">VietPhrase</h1>
-      <p className="text-neutral-600 dark:text-neutral-300">
-        Trang đọc truyện dịch Trung → Việt theo kỹ thuật VietPhrase. Xem{" "}
-        <code className="rounded bg-neutral-100 px-1 dark:bg-neutral-800">
-          docs/ARCHITECTURE.md
-        </code>{" "}
-        để biết kiến trúc tổng thể.
-      </p>
+    <main className="mx-auto flex max-w-3xl flex-1 flex-col gap-8 p-6">
+      <div className="flex flex-col gap-2">
+        <h1 className="font-display text-3xl font-semibold">VietPhrase</h1>
+        <p className="text-muted-foreground">
+          Trang đọc truyện dịch Trung → Việt theo kỹ thuật VietPhrase. Xem{" "}
+          <code className="rounded bg-muted px-1">docs/ARCHITECTURE.md</code> để biết kiến trúc
+          tổng thể.
+        </p>
+      </div>
 
       <Link
         href="/translate"
-        className="rounded-md border border-neutral-300 p-4 hover:bg-neutral-50 dark:border-neutral-700 dark:hover:bg-neutral-900"
+        className="flex items-center gap-3 rounded-lg border border-border bg-card p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
       >
-        <div className="font-medium">Dịch nhanh</div>
-        <div className="text-sm text-neutral-500">
-          Dán văn bản tiếng Trung, nhận bản dịch VietPhrase ngay lập tức.
+        <Translate size={22} className="shrink-0 text-accent" weight="duotone" />
+        <div>
+          <div className="font-medium">Dịch nhanh</div>
+          <div className="text-sm text-muted-foreground">
+            Dán văn bản tiếng Trung, nhận bản dịch VietPhrase ngay lập tức.
+          </div>
         </div>
       </Link>
 
       {inProgress.length > 0 && (
         <section className="flex flex-col gap-3">
-          <h2 className="text-lg font-medium">Tiếp tục đọc</h2>
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
+          <h2 className="font-display text-xl font-semibold">Tiếp tục đọc</h2>
+          <NovelGrid>
             {inProgress.map((p) => (
               <NovelCard
                 key={p.novel.slug}
@@ -67,30 +72,27 @@ export default async function HomePage() {
                 description={p.novel.description}
               />
             ))}
-          </div>
+          </NovelGrid>
         </section>
       )}
 
-      <section className="flex flex-col gap-3">
-        <h2 className="text-lg font-medium">Thêm truyện mới</h2>
-        <p className="text-sm text-neutral-500">
-          Dán URL trang mục lục (danh sách chương) của một truyện trên trang
-          web tiếng Trung. Hệ thống dùng bộ trích xuất chung (xem{" "}
-          <code className="rounded bg-neutral-100 px-1 dark:bg-neutral-800">
-            docs/ARCHITECTURE.md
-          </code>
-          ) — chưa được kiểm chứng trên trang thật nào, có thể thất bại với
-          một số trang.
+      <section className="flex flex-col gap-3 rounded-lg border border-border bg-card p-5 shadow-sm">
+        <h2 className="font-display text-xl font-semibold">Thêm truyện mới</h2>
+        <p className="text-sm text-muted-foreground">
+          Dán URL trang mục lục (danh sách chương) của một truyện trên trang web tiếng Trung. Hệ
+          thống dùng bộ trích xuất chung (xem{" "}
+          <code className="rounded bg-muted px-1">docs/ARCHITECTURE.md</code>) — chưa được kiểm
+          chứng trên trang thật nào, có thể thất bại với một số trang.
         </p>
         <AddBookForm />
       </section>
 
       <section className="flex flex-col gap-3">
-        <h2 className="text-lg font-medium">Thư viện truyện</h2>
+        <h2 className="font-display text-xl font-semibold">Thư viện truyện</h2>
         {novels.length === 0 ? (
-          <p className="text-sm text-neutral-400">Chưa có truyện nào. Thêm truyện ở trên.</p>
+          <p className="text-sm text-muted-foreground">Chưa có truyện nào. Thêm truyện ở trên.</p>
         ) : (
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
+          <NovelGrid>
             {novels.map((novel) => (
               <NovelCard
                 key={novel.slug}
@@ -103,7 +105,7 @@ export default async function HomePage() {
                 description={novel.description}
               />
             ))}
-          </div>
+          </NovelGrid>
         )}
       </section>
     </main>

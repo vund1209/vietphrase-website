@@ -8,6 +8,7 @@
 // only (see docs/ARCHITECTURE.md "User management and per-word
 // overrides") unless promoted to the shared dictionary.
 import { useEffect, useMemo, useState } from "react";
+import { AnimatePresence } from "framer-motion";
 import type { DisplayToken, CapStyle } from "@/lib/tokenizer";
 import { needsSpaceBetween } from "@/lib/tokenSpacing";
 import { SpanEditor, type ReuseEntry } from "./SpanEditor";
@@ -223,14 +224,14 @@ export function ChapterReader({
                           openEditor(lineIndex, tokenIndex);
                         }
                       }}
-                      className={`cursor-pointer rounded px-0.5 hover:bg-yellow-100 dark:hover:bg-yellow-900 ${
-                        isSelected ? "bg-yellow-200 dark:bg-yellow-800" : ""
+                      className={`cursor-pointer rounded px-0.5 transition-colors hover:bg-accent/20 ${
+                        isSelected ? "bg-accent/30" : ""
                       }`}
                     >
                       {token.vietnamese}
                       {trailingSpace}
                     </span>
-                    <span className="pointer-events-none absolute bottom-full left-1/2 z-10 hidden -translate-x-1/2 whitespace-nowrap rounded bg-neutral-900 px-2 py-1 text-xs text-white group-hover:block dark:bg-neutral-100 dark:text-neutral-900">
+                    <span className="pointer-events-none absolute bottom-full left-1/2 z-10 hidden -translate-x-1/2 whitespace-nowrap rounded bg-foreground px-2 py-1 text-xs text-background group-hover:block">
                       {token.chinese} · {token.hanViet}
                     </span>
                   </span>
@@ -239,40 +240,44 @@ export function ChapterReader({
         </p>
       ))}
 
-      {selection && spanTokens && (
-        <SpanEditor
-          novelSlug={novelSlug}
-          chinese={chinese}
-          hanViet={hanViet}
-          onHanVietChange={setHanViet}
-          hanVietCapitalized={hanVietCapitalized}
-          onHanVietCapitalizedChange={setHanVietCapitalized}
-          translation={translation}
-          onTranslationChange={setTranslation}
-          capStyle={capStyle}
-          onCapStyleChange={setCapStyle}
-          canExpandLeft={selection.start > 0}
-          canExpandRight={selection.end < tokenLines[selection.line].length - 1}
-          onExpandLeft={() => expand("left")}
-          onExpandRight={() => expand("right")}
-          canPromote={canPromote}
-          canApplyGlobally={canApplyGlobally}
-          saving={saving}
-          error={error}
-          onSavePersonal={() =>
-            submit(`/api/novels/${novelSlug}/overrides`, "Đã lưu (chỉ mình bạn thấy).")
-          }
-          onPromote={() =>
-            submit(
-              `/api/novels/${novelSlug}/overrides/promote`,
-              "Đã áp dụng cho mọi người đọc truyện này."
-            )
-          }
-          onApplyGlobal={() => submit("/api/dictionary/global", "Đã áp dụng cho toàn bộ từ điển.")}
-          onReuseEntry={reuseEntry}
-          onClose={closeEditor}
-        />
-      )}
+      <AnimatePresence>
+        {selection && spanTokens && (
+          <SpanEditor
+            novelSlug={novelSlug}
+            chinese={chinese}
+            hanViet={hanViet}
+            onHanVietChange={setHanViet}
+            hanVietCapitalized={hanVietCapitalized}
+            onHanVietCapitalizedChange={setHanVietCapitalized}
+            translation={translation}
+            onTranslationChange={setTranslation}
+            capStyle={capStyle}
+            onCapStyleChange={setCapStyle}
+            canExpandLeft={selection.start > 0}
+            canExpandRight={selection.end < tokenLines[selection.line].length - 1}
+            onExpandLeft={() => expand("left")}
+            onExpandRight={() => expand("right")}
+            canPromote={canPromote}
+            canApplyGlobally={canApplyGlobally}
+            saving={saving}
+            error={error}
+            onSavePersonal={() =>
+              submit(`/api/novels/${novelSlug}/overrides`, "Đã lưu (chỉ mình bạn thấy).")
+            }
+            onPromote={() =>
+              submit(
+                `/api/novels/${novelSlug}/overrides/promote`,
+                "Đã áp dụng cho mọi người đọc truyện này."
+              )
+            }
+            onApplyGlobal={() =>
+              submit("/api/dictionary/global", "Đã áp dụng cho toàn bộ từ điển.")
+            }
+            onReuseEntry={reuseEntry}
+            onClose={closeEditor}
+          />
+        )}
+      </AnimatePresence>
     </article>
   );
 }
