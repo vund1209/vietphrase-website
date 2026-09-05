@@ -4,6 +4,7 @@ import Link from "next/link";
 import "./globals.css";
 import { AuthSessionProvider } from "@/components/AuthSessionProvider";
 import { AuthNav } from "@/components/AuthNav";
+import { ToastProvider } from "@/components/ToastProvider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -35,18 +36,20 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="min-h-full flex flex-col">
         <AuthSessionProvider>
-          <header className="border-b border-neutral-200 px-6 py-3 dark:border-neutral-800">
-            <nav className="mx-auto flex max-w-5xl items-center gap-4 text-sm">
-              <Link href="/" className="font-semibold">
-                VietPhrase
-              </Link>
-              <Link href="/translate">Dịch nhanh</Link>
-              <Link href="/search">Tìm truyện</Link>
-              <Link href="/surf">Đọc web</Link>
-              <AuthNav />
-            </nav>
-          </header>
-          {children}
+          <ToastProvider>
+            <header className="border-b border-neutral-200 px-6 py-3 dark:border-neutral-800">
+              <nav className="mx-auto flex max-w-5xl items-center gap-4 text-sm">
+                <Link href="/" className="font-semibold">
+                  VietPhrase
+                </Link>
+                <Link href="/translate">Dịch nhanh</Link>
+                <Link href="/search">Tìm truyện</Link>
+                <Link href="/surf">Đọc web</Link>
+                <AuthNav />
+              </nav>
+            </header>
+            {children}
+          </ToastProvider>
         </AuthSessionProvider>
       </body>
     </html>

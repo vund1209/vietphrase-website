@@ -5,6 +5,7 @@
 // which re-checks the ADMIN role server-side.
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useToast } from "./ToastProvider";
 
 type CompletionStatus = "ONGOING" | "COMPLETED" | null;
 
@@ -13,18 +14,29 @@ interface Props {
   current: CompletionStatus;
 }
 
+const STATUS_LABEL: Record<Exclude<CompletionStatus, null>, string> = {
+  ONGOING: "Đang tiến hành",
+  COMPLETED: "Đã hoàn thành",
+};
+
 export function CompletionStatusToggle({ novelSlug, current }: Props) {
   const router = useRouter();
+  const showToast = useToast();
   const [pending, setPending] = useState(false);
 
   async function setStatus(completionStatus: CompletionStatus) {
     setPending(true);
-    await fetch(`/api/novels/${novelSlug}`, {
+    const res = await fetch(`/api/novels/${novelSlug}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ completionStatus }),
     });
     setPending(false);
+    if (res.ok) {
+      showToast(`Đã đổi trạng thái: ${completionStatus ? STATUS_LABEL[completionStatus] : "Không rõ"}.`);
+    } else {
+      showToast("Không thể đổi trạng thái.", "error");
+    }
     router.refresh();
   }
 

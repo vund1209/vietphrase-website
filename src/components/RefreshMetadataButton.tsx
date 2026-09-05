@@ -6,6 +6,7 @@
 // the ADMIN role server-side.
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useToast } from "./ToastProvider";
 
 interface Props {
   novelSlug: string;
@@ -13,6 +14,7 @@ interface Props {
 
 export function RefreshMetadataButton({ novelSlug }: Props) {
   const router = useRouter();
+  const showToast = useToast();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -27,6 +29,7 @@ export function RefreshMetadataButton({ novelSlug }: Props) {
       setError(body?.error ?? "Không thể tải lại thông tin truyện.");
       return;
     }
+    showToast("Đã cập nhật thông tin truyện.");
     router.refresh();
   }
 

@@ -11,6 +11,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { DisplayToken, CapStyle } from "@/lib/tokenizer";
 import { needsSpaceBetween } from "@/lib/tokenSpacing";
 import { SpanEditor, type ReuseEntry } from "./SpanEditor";
+import { useToast } from "./ToastProvider";
 
 interface ChapterReaderProps {
   novelSlug: string;
@@ -53,6 +54,7 @@ export function ChapterReader({
   canPromote,
   canApplyGlobally,
 }: ChapterReaderProps) {
+  const showToast = useToast();
   const [tokenLines, setTokenLines] = useState(lines);
   const [selection, setSelection] = useState<SpanSelection | null>(null);
   const [hanViet, setHanViet] = useState("");
@@ -129,7 +131,7 @@ export function ChapterReader({
     setCapStyle(entry.capStyle);
   }
 
-  async function submit(url: string) {
+  async function submit(url: string, successMessage: string) {
     if (!chinese.trim() || !translation.trim()) {
       setError("Bản dịch không được để trống.");
       return;
@@ -152,6 +154,7 @@ export function ChapterReader({
       setError(body?.error ?? "Lưu thất bại.");
       return;
     }
+    showToast(successMessage);
 
     // Optimistically collapse the saved span into a single merged token
     // wherever it appears in the currently-rendered chapter -- the next
@@ -256,9 +259,16 @@ export function ChapterReader({
           canApplyGlobally={canApplyGlobally}
           saving={saving}
           error={error}
-          onSavePersonal={() => submit(`/api/novels/${novelSlug}/overrides`)}
-          onPromote={() => submit(`/api/novels/${novelSlug}/overrides/promote`)}
-          onApplyGlobal={() => submit("/api/dictionary/global")}
+          onSavePersonal={() =>
+            submit(`/api/novels/${novelSlug}/overrides`, "Đã lưu (chỉ mình bạn thấy).")
+          }
+          onPromote={() =>
+            submit(
+              `/api/novels/${novelSlug}/overrides/promote`,
+              "Đã áp dụng cho mọi người đọc truyện này."
+            )
+          }
+          onApplyGlobal={() => submit("/api/dictionary/global", "Đã áp dụng cho toàn bộ từ điển.")}
           onReuseEntry={reuseEntry}
           onClose={closeEditor}
         />
