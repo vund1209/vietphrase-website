@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Third-party skill scripts (installed by `npx ui-ux-pro-max-cli init`),
+    // not part of this app's own source.
+    ".claude/**",
   ]),
 ]);
 

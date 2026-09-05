@@ -15,17 +15,28 @@ export function AuthNav() {
 
   if (!session?.user) {
     return (
-      <span className="ml-auto flex gap-3">
-        <Link href="/login">Đăng nhập</Link>
-        <Link href="/signup">Đăng ký</Link>
+      <span className="flex items-center gap-3">
+        <Link href="/login" className="text-muted-foreground hover:text-foreground">
+          Đăng nhập
+        </Link>
+        <Link
+          href="/signup"
+          className="rounded-md bg-secondary px-3 py-1.5 text-white hover:opacity-90 dark:text-neutral-900"
+        >
+          Đăng ký
+        </Link>
       </span>
     );
   }
 
   return (
-    <span className="ml-auto flex items-center gap-3">
-      <span className="text-neutral-500">{session.user.email}</span>
-      <button type="button" onClick={() => signOut({ callbackUrl: "/" })} className="underline">
+    <span className="flex items-center gap-3">
+      <span className="hidden text-muted-foreground md:inline">{session.user.email}</span>
+      <button
+        type="button"
+        onClick={() => signOut({ callbackUrl: "/" })}
+        className="cursor-pointer text-muted-foreground underline hover:text-foreground"
+      >
         Đăng xuất
       </button>
     </span>
