@@ -10,7 +10,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --test"
+    "test": "node --test",
+    "postinstall": "prisma generate"
   },
   "dependencies": {
     "@prisma/client": "^6",
