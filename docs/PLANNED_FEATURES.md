@@ -1,8 +1,7 @@
 # Planned features
 
 Captured from a design conversation so the reasoning isn't lost across a
-Claude Code usage reset. Items 1 and 2 are now built (see commit
-`10c4e88`); item 3 (Surf mode) is not yet started.
+Claude Code usage reset. All three items are now built.
 
 ## 1. A real global/base dictionary override (distinct from per-novel `Name`) -- DONE
 
@@ -103,7 +102,15 @@ currently no way to force a re-check.
   cooldown/rate-limit per chapter to avoid hammering a source site if
   the button gets clicked repeatedly.
 
-## 3. "Surf" mode -- read + translate an arbitrary Chinese page without embedding it
+## 3. "Surf" mode -- read + translate an arbitrary Chinese page without embedding it -- DONE
+
+Shipped without a headless-browser dependency: reuses the existing
+plain-fetch scraper (same mechanism add-by-URL already uses), per the
+user's choice after weighing it against a real headless browser
+(Playwright etc.) -- heavier, and Vercel-specific concerns (large/slow
+cold starts, function size/time limits) similar to what the dictionary
+file deployment issue already ran into. Some heavily bot-protected sites
+may still fail to fetch, same accepted limitation add-by-URL already has.
 
 Modeled on sangtacviet.com's own "Translate Webpage" nav item
 (`/surf.php`). Different from add-by-URL: **ephemeral**, no persistent
@@ -130,9 +137,6 @@ the library.
 
 ## Status
 
-1. **Global dictionary overrides** -- done (`10c4e88`).
-2. **Manual re-fetch** -- done (`10c4e88`).
-3. **Surf mode** -- not started. Unblocked now that #1 exists (an edit
-   made while surfing has somewhere sensible to land -- the global
-   table). Come back to it with the same plan-first-then-verify
-   workflow used for everything else.
+All three shipped: global dictionary overrides + manual re-fetch
+(`10c4e88`), Surf mode (`d0dbbf2`). This document can be archived or
+repurposed for whatever's next.
