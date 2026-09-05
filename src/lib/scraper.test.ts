@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { findTocLink, fetchChapterList } from "./scraper.ts";
+import { findTocLink, fetchChapterList, selectNewChapters } from "./scraper.ts";
 
 test("finds a same-origin table-of-contents link by href pattern", () => {
   const html = `
@@ -109,4 +109,26 @@ test("fetchChapterList follows the sfacg two-hop via its adapter, merging every 
   assert.equal(result.description, "真实简介第一句。\n真实简介第二句。");
   assert.equal(result.author, "真实作者");
   assert.equal(result.coverImageUrl, "https://book.sfacg.com/cover.jpg");
+});
+
+test("selectNewChapters keeps only fetched chapters not already stored, by sourceUrl", () => {
+  const existing = new Set(["https://example.com/c/1", "https://example.com/c/2"]);
+  const fetched = [
+    { title: "Chương 1", url: "https://example.com/c/1" },
+    { title: "Chương 2", url: "https://example.com/c/2" },
+    { title: "Chương 3", url: "https://example.com/c/3" },
+  ];
+  const result = selectNewChapters(existing, fetched);
+  assert.deepEqual(result, [{ title: "Chương 3", url: "https://example.com/c/3" }]);
+});
+
+test("selectNewChapters returns everything when nothing is stored yet", () => {
+  const fetched = [{ title: "Chương 1", url: "https://example.com/c/1" }];
+  assert.deepEqual(selectNewChapters(new Set(), fetched), fetched);
+});
+
+test("selectNewChapters returns nothing new when the fetched list is a subset of what's stored", () => {
+  const existing = new Set(["https://example.com/c/1", "https://example.com/c/2"]);
+  const fetched = [{ title: "Chương 1", url: "https://example.com/c/1" }];
+  assert.deepEqual(selectNewChapters(existing, fetched), []);
 });

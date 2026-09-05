@@ -213,6 +213,22 @@ export async function fetchChapterList(bookUrl: string): Promise<FetchedChapterL
   };
 }
 
+// Diffs a freshly-fetched chapter list against what's already stored for a
+// novel (see src/app/api/novels/[slug]/refetch-chapters/route.ts, the admin
+// "check for new chapters" action) -- there's no other update mechanism,
+// see docs/ARCHITECTURE.md "Scrape timing": a book's chapter list is
+// otherwise fetched exactly once, at add time. Matches by sourceUrl, not
+// position, so it stays correct even if the site prepends a volume/foreword
+// entry above chapter 1. Assumes a site only appends chapters over time
+// (true for ongoing web novels) -- a site that reorders or renumbers its
+// entire existing list isn't handled and would need a full re-embed.
+export function selectNewChapters(
+  existingSourceUrls: ReadonlySet<string>,
+  fetchedChapters: ChapterListItem[]
+): ChapterListItem[] {
+  return fetchedChapters.filter((c) => !existingSourceUrls.has(c.url));
+}
+
 export interface FetchedChapterContent {
   title: string | null;
   rawText: string;

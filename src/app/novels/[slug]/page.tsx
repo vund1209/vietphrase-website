@@ -7,6 +7,7 @@ import { hanVietOf } from "@/lib/tokenizer";
 import { DeleteNovelButton } from "@/components/DeleteNovelButton";
 import { CompletionStatusToggle } from "@/components/CompletionStatusToggle";
 import { RefreshMetadataButton } from "@/components/RefreshMetadataButton";
+import { CheckNewChaptersButton } from "@/components/CheckNewChaptersButton";
 
 const COMPLETION_LABEL: Record<string, string> = {
   ONGOING: "Đang tiến hành",
@@ -98,13 +99,14 @@ export default async function NovelPage({
             <dd>{firstAppear}</dd>
           </dl>
 
-          <div className="mt-2 flex items-center gap-4">
+          <div className="mt-2 flex flex-wrap items-center gap-4">
             <Link href={`/novels/${novel.slug}/overrides`} className="text-sm underline">
               Từ đã sửa của bạn
             </Link>
             {canDelete && (
               <>
                 <RefreshMetadataButton novelSlug={novel.slug} />
+                <CheckNewChaptersButton novelSlug={novel.slug} />
                 <DeleteNovelButton novelSlug={novel.slug} novelTitle={novel.title} redirectTo="/" />
               </>
             )}
