@@ -6,12 +6,16 @@ ref/
 __pycache__/
 *.pyc
 
-# Node / Next.js (once the app is scaffolded)
+# Node / Next.js
 node_modules/
 .next/
 out/
 dist/
 build/
+npm-debug.log*
+*.tsbuildinfo
+next-env.d.ts
+.vercel
 
 # Prisma
 prisma/migrations/dev.db*
@@ -24,7 +28,11 @@ prisma/migrations/dev.db*
 # OS junk
 .DS_Store
 Thumbs.db
+*.pem
 
 # Editors
 .vscode/
 .idea/
+
+# Test coverage
+/coverage

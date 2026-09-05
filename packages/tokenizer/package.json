@@ -5,6 +5,7 @@
   "type": "module",
   "description": "Longest-match VietPhrase tokenizer. See docs/VIETPHRASE_CORE.md for the algorithm spec this implements.",
   "main": "src/tokenizer.mjs",
+  "types": "src/tokenizer.d.ts",
   "scripts": {
     "test": "node --test"
   },

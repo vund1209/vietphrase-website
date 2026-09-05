@@ -15,6 +15,15 @@ tiebreaker, and concrete samples from it (like the translate-endpoint
 contract below) should be treated as informed precedent, not just
 inspiration.
 
+**Status (2026-09-05): the translate page is scaffolded and working.** The
+Next.js app now exists (`src/app/`), and `POST /api/translate` calls
+`packages/tokenizer` directly against `data/seed/dictionary_seed.db` --
+verified end to end to reproduce the real sangtacviet.com sample below
+exactly. The reading library (surfaces 1/2) and the Postgres/Prisma
+backend are still design-only; see "Data access: avoid per-lookup DB
+round-trips" below for a correction that must land before the tokenizer
+is pointed at Postgres.
+
 ## The three surfaces, and why they're really one pipeline
 
 The product was described as three features:
@@ -190,6 +199,36 @@ would need, and it's free to keep them now versus expensive to
 reconstruct later. `langhint=chinese` in their URL hints their endpoint
 may be multi-language; ours doesn't need that param at all since this
 whole project is Chinese-to-Vietnamese only.
+
+## Data access: avoid per-lookup DB round-trips
+
+The current `packages/tokenizer` implementation (used as-is by
+`/api/translate` today) queries SQLite once per candidate substring while
+scanning for the longest match -- fine for a local SQLite file (same
+process, no network), but this must **not** carry over unchanged once the
+tokenizer is pointed at Postgres/Prisma. One network round-trip per
+candidate substring, over a real chapter of text, would be slow and
+would hammer the database on every single translation.
+
+Before wiring the tokenizer to Postgres, it needs to load the relevant
+dictionary tables (or the relevant per-novel slice of `names`, plus all of
+`pronouns`/`words`/`hanviet_fallback`) into an in-memory structure once
+(at process startup, or lazily on first use and then cached), and do all
+longest-match scanning against that in-memory structure instead of
+issuing a query per lookup. This is a correction to the original design,
+not yet implemented -- `packages/tokenizer` still talks to SQLite
+directly as of this writing. Flagging it here so it isn't forgotten once
+the Prisma migration work starts.
+
+## Hosting: cloud Postgres free tier
+
+Decided: a cloud free-tier Postgres provider (Neon or Supabase), not a
+self-hosted database, for v1 -- no infra to manage, generous enough free
+tier for a project at this stage. Not yet narrowed to one specific
+provider; either is Prisma-compatible. Once picked, the real
+`DATABASE_URL` goes in a local `.env` (never committed -- copy the root
+`.env.example`), and this doc should be updated to say which was chosen
+and why.
 
 ## Open problem: discovering the parent book from a single chapter URL
 

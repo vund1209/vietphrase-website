@@ -6,8 +6,13 @@ an editable dictionary the user builds up over time.
 
 ## Project status
 
-Currently at the **data preparation and design** stage — no app code yet
-beyond the standalone `packages/tokenizer` module. See
+The Next.js app is scaffolded and has one working end-to-end feature: the
+**translate page** (`/translate`), which posts Chinese text to
+`/api/translate` and gets back a VietPhrase translation from
+`packages/tokenizer` reading `data/seed/dictionary_seed.db` directly. This
+was verified to reproduce a real sangtacviet.com sample translation
+exactly. The reading library (book URL → chapters → lazy scrape-on-view)
+and the Postgres/Prisma backend are still design-only — see
 `docs/DICTIONARY_SOURCES.md` for how the seed dictionary was built,
 `docs/VIETPHRASE_CORE.md` for how the translation engine itself works, and
 `docs/ARCHITECTURE.md` for how the site's three features (reading library,
@@ -19,6 +24,28 @@ beyond the standalone `packages/tokenizer` module. See
 most of this repo was built and tested through a bridged environment
 running different Node/Python versions than the real target machine —
 that doc explains exactly what's unverified and how to check it.
+
+## Getting started
+
+```
+npm install
+npm run dev
+```
+
+Then visit `http://localhost:3000/translate` and paste Chinese text in the
+input box to get a VietPhrase translation — this reads
+`data/seed/dictionary_seed.db` directly via `packages/tokenizer`, no
+database setup required for this page. The home page (`/`) links to it;
+the reading-library link there is a disabled placeholder for now.
+
+To run the tokenizer's own test suite:
+
+```
+npm test --workspace=@vietphrase/tokenizer
+```
+
+Prisma/Postgres are not wired up yet — `prisma/schema.prisma` is a forward
+design, not a running database. See "Next up" below.
 
 ## Structure
 
@@ -39,6 +66,8 @@ vietphrase-website/
 │   └── DICTIONARY_SOURCES.md           # full source evaluation + build report
 ├── .nvmrc                              # pins Node to the versions in ENVIRONMENT.md
 ├── .python-version                     # pins Python to the versions in ENVIRONMENT.md
+├── src/
+│   └── app/                            # Next.js App Router: /, /translate, /api/translate
 ├── packages/
 │   └── tokenizer/                      # production tokenizer module (tested, no npm deps)
 ├── prisma/
@@ -76,26 +105,20 @@ the app exists.
 
 ## Next up
 
-- `packages/tokenizer` has the production longest-match tokenizer, tested
-  (`npm test`, 10 passing) and validated against real data — see
-  `docs/VIETPHRASE_CORE.md` for the algorithm spec and its "Validation"
-  section for how it got here. Not wired into any app yet.
-- `prisma/schema.prisma` has the live-app Postgres schema drafted (words /
-  names / pronouns / hanviet_fallback / scrape_blacklist + novels, with
-  per-novel name scoping) — see the comments in that file for the design
-  rationale. Not yet wired to a running app or migrated anywhere.
-- `docs/ARCHITECTURE.md` has the resolved product architecture: the
-  reading library and "live scrape/surf" turned out to be one pipeline
-  (lazy scrape-on-view, no job queue for v1, no full-page proxy), and
-  `prisma/schema.prisma` now has the `Chapter` model + `Novel` fields
-  that design needs. Still unvalidated: the generic chapter-list/content
-  extraction heuristic needs 2-3 real target site URLs to design against
-  properly (see "Open problem: book discovery" in that doc).
-- Scaffold the Next.js app (reader UI, dictionary editor, scraper) per
-  `docs/ARCHITECTURE.md` — not started yet. Part of that work is a
-  one-time import script loading `dictionary_seed.db` into the Postgres
-  schema (via the reserved "global" Novel row for names), after which
-  `packages/tokenizer` should be pointed at Prisma instead of SQLite
-  directly.
+- **Prisma/Postgres wiring**: pick a provider (Neon or Supabase free
+  tier), set a real `DATABASE_URL` in a local `.env` (never commit it —
+  copy `.env.example`), run `npx prisma generate`/`migrate dev` **on a
+  machine with normal internet access** (this repo's bridged dev
+  environment can't reach `binaries.prisma.sh` — see
+  `docs/ENVIRONMENT.md`), then write the one-time import script loading
+  `dictionary_seed.db` into Postgres (via the reserved "global" Novel row
+  for names).
+- **In-memory dictionary cache**: once `packages/tokenizer` moves from
+  SQLite to Prisma/Postgres, it must load the dictionary into memory once
+  at startup rather than issuing one DB query per candidate substring —
+  see `docs/ARCHITECTURE.md` for the note on this.
+- Scaffold the reading library: book-add-by-URL, chapter list, lazy
+  scrape-on-view chapter page, using the generic-extraction-plus-adapters
+  scraping strategy in `docs/ARCHITECTURE.md`.
 - Phase 2: implement the `rule.txt`-style grammar-reorder DSL for real
   readability gains beyond phrase substitution (see docs for details).

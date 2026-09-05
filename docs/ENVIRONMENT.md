@@ -21,8 +21,8 @@ Claude does not have terminal access to the Windows machine directly --
 commands run through a bridged Linux environment instead. Everything done
 in this repo up to now (`data/seed/build_dictionary.py`,
 `data/seed/migrate_split_schema.py`, `packages/tokenizer` and its test
-suite, `prototype/tokenizer.mjs`) actually ran on that Linux environment's
-versions, not the Windows versions above:
+suite, `prototype/tokenizer.mjs`, the Next.js app scaffold) actually ran
+on that Linux environment's versions, not the Windows versions above:
 
 | Tool | Version actually used so far |
 |---|---|
@@ -46,7 +46,53 @@ Python 3.14. This only matters when rebuilding the dictionary from
 scratch (see `docs/DICTIONARY_SOURCES.md`), not for normal use of the
 already-built `dictionary_seed.db`.
 
-The npm 10.9.8 bug above may simply not exist on the real machine's
-12.0.2 -- npm itself suggested that exact upgrade when this was hit, and
-this machine already has it. Worth confirming with a normal `npm install`
-somewhere, but not expected to be a real problem.
+## npm bug: installing `prisma` crashes this bridge's npm 10.9.8
+
+`npm install prisma` (and even `npm cache clean --force`) reliably threw
+`Cannot read properties of null (reading 'edgesOut')` -- an npm arborist
+internal error. Confirmed this is specific to `prisma`'s peer-dependency
+graph, not a general npm breakage (`npm install lodash`, `npm install
+next react react-dom` all worked fine on the same npm). Fixed with
+`npm install prisma --legacy-peer-deps`, made permanent project-wide via
+the root `.npmrc` (`legacy-peer-deps=true`, already committed) so no one
+has to remember the flag. This npm 10.9.8 bug may simply not exist on the
+real machine's npm 12.0.2 -- worth confirming with a normal `npm install`
+there, but not expected to be a real problem, and the `.npmrc` fix is
+harmless either way.
+
+## Sandbox limitation: `prisma validate`/`generate` cannot run in this bridged environment
+
+Prisma's CLI needs to download its query/schema engine binaries from
+`binaries.prisma.sh` on first use. That domain returns `403` through this
+bridge's proxy (confirmed directly with `curl`, not just through the
+Prisma CLI) -- it's not in the sandbox's allowed domain list, and this
+isn't something fixable from within this session.
+
+Practical effect: `prisma/schema.prisma` has only been reviewed by eye
+for syntax so far -- **`npx prisma validate`, `npx prisma generate`, and
+`npx prisma migrate dev` are all unverified**. Once a real `DATABASE_URL`
+is available (see the root `.env.example`), please run these on the real
+Windows machine, which has normal internet access:
+
+```
+npx prisma validate
+npx prisma generate
+npx prisma migrate dev --name init
+```
+
+If any of these surface a schema mistake, that's expected -- report it
+back so the schema can be fixed; it just couldn't be caught earlier here.
+
+## Other environment notes
+
+- Google Fonts (`fonts.googleapis.com`) is also unreachable from this
+  bridge -- `next dev` logs a warning and falls back to a system font.
+  Not a real bug, just another sandbox network gap; expected to work
+  normally on the real machine.
+- `npm audit` currently reports 3 high-severity advisories in
+  `deepmerge-ts` (pulled in via `@prisma/config` via `prisma`) -- a
+  stack-exhaustion DoS report. Not fixed with `npm audit fix --force`
+  because that would force a breaking `prisma` version change for a
+  dev-only CLI tool that never processes untrusted input in this
+  project. Worth revisiting when Prisma ships a fix upstream, but not
+  urgent.
