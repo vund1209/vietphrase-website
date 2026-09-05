@@ -15,6 +15,7 @@ interface NovelCardProps {
   href?: string;
   /** Overrides the default "author · N chương" line -- e.g. "Chương 3" for a continue-reading card. */
   subtitle?: string;
+  description?: string | null;
 }
 
 export function NovelCard({
@@ -26,6 +27,7 @@ export function NovelCard({
   canDelete,
   href,
   subtitle,
+  description,
 }: NovelCardProps) {
   return (
     <div className="relative flex flex-col gap-2">
@@ -40,6 +42,9 @@ export function NovelCard({
         <div className="text-xs text-neutral-500">
           {subtitle ?? `${author ? `${author} · ` : ""}${chapterCount} chương`}
         </div>
+        {description && (
+          <div className="line-clamp-3 text-xs text-neutral-500">{description}</div>
+        )}
       </Link>
       {canDelete && (
         <div className="absolute top-1 right-1 rounded-md bg-white/90 backdrop-blur-sm dark:bg-neutral-900/90">

@@ -64,6 +64,7 @@ export default async function HomePage() {
                 canDelete={false}
                 href={`/novels/${p.novel.slug}/chapters/${p.chapterNumber}`}
                 subtitle={`Chương ${p.chapterNumber}`}
+                description={p.novel.description}
               />
             ))}
           </div>
@@ -99,6 +100,7 @@ export default async function HomePage() {
                 coverImageUrl={novel.coverImageUrl}
                 chapterCount={novel._count.chapters}
                 canDelete={canDelete}
+                description={novel.description}
               />
             ))}
           </div>

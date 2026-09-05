@@ -71,6 +71,7 @@ export default async function SearchPage({
               coverImageUrl={novel.coverImageUrl}
               chapterCount={novel._count.chapters}
               canDelete={canDelete}
+              description={novel.description}
             />
           ))}
         </div>
