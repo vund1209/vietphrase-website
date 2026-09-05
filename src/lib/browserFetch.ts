@@ -22,7 +22,13 @@ const FETCH_HEADERS = {
 const BOT_CHALLENGE_RE =
   /just a moment|attention required|cf-browser-verification|__cf_chl_|checking your browser|access denied|enable javascript and cookies/i;
 
-function looksLikeBotChallenge(status: number, html: string): boolean {
+// Exported for scraper.ts's fetchHtml (the main embed pipeline), which
+// needs the same bot-challenge fallback but must still throw its own
+// descriptive error for a genuine (non-challenge) HTTP failure like a 404
+// -- fetchRawHtml below doesn't distinguish those, which is fine for
+// Browse mode (best-effort rendering) but not for an add-a-book flow that
+// needs to tell the difference.
+export function looksLikeBotChallenge(status: number, html: string): boolean {
   if (status === 403 || status === 503) return true;
   return BOT_CHALLENGE_RE.test(html.slice(0, 4000));
 }
@@ -32,7 +38,7 @@ async function fetchPlain(url: string): Promise<{ status: number; html: string }
   return { status: res.status, html: await res.text() };
 }
 
-async function fetchWithHeadlessBrowser(url: string): Promise<string> {
+export async function fetchWithHeadlessBrowser(url: string): Promise<string> {
   const isProduction = !!process.env.VERCEL;
   const browser = isProduction
     ? await (async () => {

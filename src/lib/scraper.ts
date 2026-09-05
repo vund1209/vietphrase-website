@@ -7,6 +7,7 @@ import { extractChapterList } from "./extract/chapterList.ts";
 import { extractChapterContent } from "./extract/chapterContent.ts";
 import { resolveAdapter } from "./extract/adapters.ts";
 import { filterBlacklist } from "./blacklist.ts";
+import { looksLikeBotChallenge, fetchWithHeadlessBrowser } from "./browserFetch.ts";
 import type { ChapterListItem } from "./extract/types";
 
 const FETCH_HEADERS = {
@@ -14,12 +15,23 @@ const FETCH_HEADERS = {
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
 };
 
+// Falls back to a real headless browser (see src/lib/browserFetch.ts) when
+// the plain fetch looks like a bot challenge -- e.g. book.sfacg.com works
+// fine plain, but a Cloudflare-protected site like 69shuba.com would
+// otherwise fail to ever be embeddable as a library book at all (Browse
+// mode already had this fallback; the add-a-book/re-scrape pipeline
+// didn't). A genuine non-challenge failure (404 etc.) still throws its own
+// descriptive error instead of silently trying a browser for no reason.
 async function fetchHtml(url: string): Promise<string> {
   const res = await fetch(url, { headers: FETCH_HEADERS });
+  const html = await res.text();
+  if (looksLikeBotChallenge(res.status, html)) {
+    return fetchWithHeadlessBrowser(url);
+  }
   if (!res.ok) {
     throw new Error(`Fetch failed: ${res.status} ${res.statusText} (${url})`);
   }
-  return res.text();
+  return html;
 }
 
 function extractPageTitle(html: string): string | null {
