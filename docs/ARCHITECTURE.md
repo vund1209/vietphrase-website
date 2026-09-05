@@ -353,7 +353,77 @@ chapter URL" case. If no parent book can be found, the fallback is
 presumably to translate just that one chapter as an orphaned entry —
 acceptable, but not designed in detail yet.
 
+## User management and per-word overrides
+
+**Implementation status (2026-09-05): schema and application code
+written, migration not yet applied.** This needs `npx prisma migrate dev
+--name add_user_word_overrides` (or similar) followed by `npx prisma
+generate` run on the real machine before any of it works end to end --
+same pattern as the `binaryTargets` fix in "Scraping strategy" above.
+Everything in this section typechecks against the *new* schema but not
+yet against the currently-generated Prisma Client, for the same reason.
+
+**Why this exists:** researching sangtacviet.com (the reference site)
+turned up a feature this project didn't have yet -- every translated
+word/phrase is individually clickable, letting a reader fix a bad
+VietPhrase substitution inline rather than living with it for the whole
+chapter. That's valuable (it's exactly how a shared dictionary like
+`Name` actually improves over time), but exposing *editing* to every
+reader directly against the shared `Name` table would mean anyone could
+vandalize what every other reader of that novel sees, with no way to
+tell whose edit is whose. The fix is to give every override an owner:
+
+- **`User`** -- email + bcrypt password only (Auth.js v5 Credentials
+  provider, JWT sessions, no OAuth app to register/maintain -- this is a
+  small, trusted-editor product, not a public sign-up funnel). Two
+  roles: `READER` (default) and `EDITOR`. No self-service role upgrade;
+  an existing EDITOR (or direct DB access) has to grant it.
+- **`UserWordOverride`** -- a reader's *private* correction for one
+  Chinese phrase in one novel. Visible only to that reader, ever, unless
+  promoted (see below). This is the table the interactive reader writes
+  to when someone clicks a word and saves a fix.
+- **`Name`** (existing, unchanged shape) stays the shared, editor-
+  curated dictionary every reader of a novel sees -- now with an added
+  nullable `promotedByUserId` for a lightweight audit trail of who
+  promoted what.
+
+**Read-path layering**, per `src/lib/overrides.ts` /
+`src/lib/novels.ts`: an anonymous reader (or a signed-in reader with no
+personal overrides for that novel) is served the existing cached
+`Chapter.translatedText` exactly as before -- zero behavior change, zero
+added cost. A signed-in reader is instead served a freshly re-tokenized
+render of `Chapter.rawText`, with their own `UserWordOverride` rows
+layered on top of the shared `Name` dictionary (personal always wins on
+conflict, never affects what anyone else sees). This re-tokenize is
+cheap -- an in-memory SQLite pass over text already in hand, not a
+re-scrape -- but it does mean a signed-in reader always pays that cost,
+even with zero personal overrides, in exchange for getting the
+interactive per-word view. The shared `translatedText` cache column
+itself is untouched by a personal override; it only gets invalidated
+(cleared, chapter status reset to `SCRAPED` so it lazily re-translates
+next view) when an editor **promotes** an override into `Name`, since
+that's the one action that changes what every reader sees.
+
+**Promotion** (`POST /api/novels/[slug]/overrides/promote`, EDITOR role
+required, re-checked server-side regardless of what the UI shows) takes
+a chineseText/vietnameseText pair directly rather than a specific
+`UserWordOverride` id -- an editor can review any reader's suggestion
+(surfaced today via each reader's own `/novels/[slug]/overrides` page)
+or type their own correction, and promote whichever value they judge
+best.
+
+**Interactive reader** (`src/components/ChapterReader.tsx`): each
+translated token renders as its own clickable `<span>`. Clicking one
+opens an inline editor; saving posts to
+`/api/novels/[slug]/overrides` and optimistically updates every instance
+of that exact Chinese phrase in the currently-rendered chapter. Modeled
+on sangtacviet.com's per-word `<i>`-wrapped tokens (see the read-mechanic
+research that motivated this), minus their word-level Hán-Việt tooltip
+and text-to-speech layers -- deliberately out of scope here (see below).
+
 ## What's deliberately out of scope for v1
+
+
 
 - No background job queue/worker (see "Scrape timing" above).
 - No full-page HTML proxy/mirroring (see "The three surfaces" above).
@@ -363,3 +433,10 @@ acceptable, but not designed in detail yet.
   is designed against general knowledge of how these sites tend to be
   structured, not tested against real pages. Needs 2-3 real example URLs
   to validate against before this is trusted.
+- No word-level Hán-Việt reading tooltips or text-to-speech (sangtacviet.com
+  has both; this project's owner explicitly doesn't want audio/voice
+  features). Per-word click-to-edit is in scope; those two aren't.
+- No self-service READER→EDITOR upgrade path, no password reset/email
+  verification flow, no OAuth sign-in -- all deliberately out of scope
+  for a small, trusted-editor product (see "User management and per-word
+  overrides" above).

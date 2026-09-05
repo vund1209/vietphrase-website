@@ -74,8 +74,9 @@ model Novel {
   status        NovelStatus @default(PENDING)
   createdAt     DateTime    @default(now())
 
-  names    Name[]
-  chapters Chapter[]
+  names             Name[]
+  chapters          Chapter[]
+  userWordOverrides UserWordOverride[]
 
   @@map("novels")
 }
@@ -132,6 +133,14 @@ model Name {
   source         String
   isActive       Boolean  @default(true)
   createdById    String?
+  // Set when this shared entry originated from an editor promoting a
+  // reader's private UserWordOverride (see UserWordOverride below) --
+  // null for rows seeded some other way (e.g. a future bulk import).
+  // Deliberately SetNull on delete: losing track of who promoted an
+  // entry isn't worth cascading the deletion of the shared translation
+  // itself if that editor's account is later removed.
+  promotedByUserId Int?
+  promotedByUser   User?    @relation(fields: [promotedByUserId], references: [id], onDelete: SetNull)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -139,4 +148,61 @@ model Name {
   @@index([phraseLength])
   @@index([novelId])
   @@map("names")
+}
+
+/// A registered reader/editor account. Credentials auth only (email +
+/// bcrypt-hashed password) -- see docs/ARCHITECTURE.md "User management
+/// and per-word overrides" for why: this is a small, trusted-editor
+/// product, not a public sign-up funnel, so there's no OAuth provider
+/// wiring to maintain.
+model User {
+  id           Int      @id @default(autoincrement())
+  email        String   @unique
+  passwordHash String
+  // READER: can save private word overrides for any novel, visible only
+  // to themselves. EDITOR: can additionally promote a private override
+  // (theirs or another reader's) into the shared Name dictionary that
+  // every reader of that novel sees. There is no self-service upgrade
+  // path from READER to EDITOR -- an existing EDITOR (or direct DB
+  // access) has to grant it. See docs/ARCHITECTURE.md.
+  role         UserRole @default(READER)
+  createdAt    DateTime @default(now())
+
+  wordOverrides UserWordOverride[]
+  // Reverse side of Name.promotedByUser above -- no explicit @relation
+  // needed since Name<->User has only one FK linking them.
+  promotedNames Name[]
+
+  @@map("users")
+}
+
+enum UserRole {
+  READER
+  EDITOR
+}
+
+/// A reader's *private* word/phrase override for one novel -- visible
+/// only to that reader, never shared, until (if ever) an EDITOR
+/// promotes it into the novel's shared Name dictionary. This is what
+/// makes "click a word, fix its translation" safe to expose to every
+/// registered reader without risking vandalism of what everyone else
+/// sees: see docs/ARCHITECTURE.md "User management and per-word
+/// overrides" for the full reasoning (this table exists specifically
+/// because letting every reader edit the shared Name table directly
+/// was the rejected alternative).
+model UserWordOverride {
+  id             Int      @id @default(autoincrement())
+  userId         Int
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  novelId        Int
+  novel          Novel    @relation(fields: [novelId], references: [id], onDelete: Cascade)
+  chineseText    String
+  vietnameseText String
+  phraseLength   Int
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([userId, novelId, chineseText])
+  @@index([novelId, phraseLength])
+  @@map("user_word_overrides")
 }

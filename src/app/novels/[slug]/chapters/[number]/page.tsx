@@ -1,11 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { auth } from "@/lib/auth";
 import {
   ChapterNotFoundError,
   ScrapeFailedError,
   getNovelBySlug,
   getOrTranslateChapter,
 } from "@/lib/novels";
+import { ChapterReader } from "@/components/ChapterReader";
 
 // Library/reader pages show live, per-request data (novels/chapters get
 // added and translated at runtime) -- never statically prerender these.
@@ -23,9 +25,12 @@ export default async function ChapterPage({
   const novel = await getNovelBySlug(slug);
   if (!novel) notFound();
 
+  const session = await auth();
+  const userId = session?.user?.id ? Number(session.user.id) : undefined;
+
   let result: Awaited<ReturnType<typeof getOrTranslateChapter>>;
   try {
-    result = await getOrTranslateChapter(slug, chapterNumber);
+    result = await getOrTranslateChapter(slug, chapterNumber, userId);
   } catch (err) {
     if (err instanceof ChapterNotFoundError) notFound();
     if (!(err instanceof ScrapeFailedError)) throw err;
@@ -59,9 +64,13 @@ export default async function ChapterPage({
       <h1 className="text-xl font-semibold">
         Chương {chapterNumber}: {result.chapter.title}
       </h1>
-      <article className="whitespace-pre-wrap text-lg leading-relaxed">
-        {result.chapter.translatedText}
-      </article>
+      {result.tokens ? (
+        <ChapterReader novelSlug={slug} lines={result.tokens} />
+      ) : (
+        <article className="whitespace-pre-wrap text-lg leading-relaxed">
+          {result.chapter.translatedText}
+        </article>
+      )}
 
       <div className="flex items-center justify-between border-t border-neutral-200 pt-4 dark:border-neutral-800">
         {hasPrev ? (

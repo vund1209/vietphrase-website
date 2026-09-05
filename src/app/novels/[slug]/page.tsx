@@ -34,6 +34,9 @@ export default async function NovelPage({
             Nguồn: {novel.sourceUrl}
           </p>
         )}
+        <Link href={`/novels/${novel.slug}/overrides`} className="text-sm underline">
+          Từ đã sửa của bạn
+        </Link>
       </div>
 
       <ul className="flex flex-col divide-y divide-neutral-200 dark:divide-neutral-800">
