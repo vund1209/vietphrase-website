@@ -27,6 +27,18 @@
 // - Soft delete (`isActive`) + `updatedAt` + `createdById` live on `Name`
 //   only, since that's the table getting edited row by row. `Word` /
 //   `Pronoun` don't need edit history yet — add it if/when that changes.
+// - `Novel` now does double duty: it's both the per-novel name-override
+//   scope above, AND the "Book" entity for the reading site (see
+//   docs/ARCHITECTURE.md) -- title/chapters/etc. That wasn't planned
+//   together, but a book's chapters and its name overrides genuinely
+//   belong to the same entity, so it converged naturally rather than
+//   being forced. The one reserved "global" Novel row (slug "global")
+//   is not a real book -- its `status`/`chapters` are meaningless for
+//   that row; it exists purely as the name-scoping fallback target.
+// - `Chapter.rawText`/`translatedText` are nullable because scraping is
+//   lazy (see docs/ARCHITECTURE.md "Scrape timing"): a chapter can exist
+//   -- known from the chapter list -- before it's ever been fetched.
+//   `status` tracks where in that lifecycle a given chapter is.
 
 generator client {
   provider = "prisma-client-js"
@@ -39,17 +51,60 @@ datasource db {
 
 /// Every novel/story being translated, plus one reserved row (slug
 /// "global") representing "no specific novel" — the fallback scope for
-/// names that aren't overridden per-story.
+/// names that aren't overridden per-story. Also the "Book" entity for
+/// the reading site (see docs/ARCHITECTURE.md) -- the reserved "global"
+/// row is the one exception, not a real book.
 model Novel {
-  id        Int      @id @default(autoincrement())
-  slug      String   @unique
-  title     String
-  sourceUrl String?
-  createdAt DateTime @default(now())
+  id            Int         @id @default(autoincrement())
+  slug          String      @unique
+  title         String
+  author        String?
+  sourceUrl     String?
+  coverImageUrl String?
+  status        NovelStatus @default(PENDING)
+  createdAt     DateTime    @default(now())
 
-  names Name[]
+  names    Name[]
+  chapters Chapter[]
 
   @@map("novels")
+}
+
+enum NovelStatus {
+  PENDING // chapter list not yet fetched (or: this is the reserved "global" row)
+  READY // chapter list fetched; chapters fill in lazily as they're viewed
+  ERROR // chapter list fetch failed
+}
+
+/// One chapter of a Novel. Rows are created for every chapter as soon as
+/// the chapter list is fetched (status PENDING), but `rawText` /
+/// `translatedText` stay null until that specific chapter is scraped and
+/// translated -- lazily, on first view. See docs/ARCHITECTURE.md
+/// "Scrape timing" for why this is lazy rather than eager.
+model Chapter {
+  id             Int           @id @default(autoincrement())
+  novelId        Int
+  novel          Novel         @relation(fields: [novelId], references: [id], onDelete: Cascade)
+  chapterNumber  Int
+  title          String
+  sourceUrl      String
+  rawText        String? // Chinese; null until first scraped
+  translatedText String? // Vietnamese; null until first translated
+  status         ChapterStatus @default(PENDING)
+  scrapedAt      DateTime?
+  translatedAt   DateTime?
+  createdAt      DateTime      @default(now())
+
+  @@unique([novelId, chapterNumber])
+  @@index([novelId])
+  @@map("chapters")
+}
+
+enum ChapterStatus {
+  PENDING // known from the chapter list, not yet scraped
+  SCRAPED // raw text fetched, not yet translated
+  TRANSLATED // ready to read
+  ERROR // scrape or translation failed
 }
 
 /// Bulk phrase dictionary — the longest-match substitution target during

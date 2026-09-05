@@ -6,11 +6,13 @@ an editable dictionary the user builds up over time.
 
 ## Project status
 
-Currently at the **data preparation** stage — no app code yet. See
-`docs/DICTIONARY_SOURCES.md` for the full writeup of how the seed dictionary
-was built, and `docs/VIETPHRASE_CORE.md` for how the translation engine
-itself is designed to work (tokenizer algorithm, lookup priority, open
-decisions) — written before the app exists so none of it gets lost.
+Currently at the **data preparation and design** stage — no app code yet
+beyond the standalone `packages/tokenizer` module. See
+`docs/DICTIONARY_SOURCES.md` for how the seed dictionary was built,
+`docs/VIETPHRASE_CORE.md` for how the translation engine itself works, and
+`docs/ARCHITECTURE.md` for how the site's three features (reading library,
+"live scrape/surf", translate page) fit together as one pipeline — all
+written before the app exists so none of it gets lost.
 
 ## Structure
 
@@ -25,6 +27,7 @@ vietphrase-website/
 │       ├── CVDICT.u8                   # raw source (v1)
 │       └── hanviet-pinyin.csv          # raw source (v1)
 ├── docs/
+│   ├── ARCHITECTURE.md                 # product architecture: how the site's 3 features fit together
 │   ├── VIETPHRASE_CORE.md              # how the translation engine works (algorithm, open decisions)
 │   └── DICTIONARY_SOURCES.md           # full source evaluation + build report
 ├── packages/
@@ -72,11 +75,18 @@ the app exists.
   names / pronouns / hanviet_fallback / scrape_blacklist + novels, with
   per-novel name scoping) — see the comments in that file for the design
   rationale. Not yet wired to a running app or migrated anywhere.
-- Scaffold the Next.js app (reader UI, dictionary editor, scraper) per the
-  architecture discussed — not started yet. Part of that work is a
+- `docs/ARCHITECTURE.md` has the resolved product architecture: the
+  reading library and "live scrape/surf" turned out to be one pipeline
+  (lazy scrape-on-view, no job queue for v1, no full-page proxy), and
+  `prisma/schema.prisma` now has the `Chapter` model + `Novel` fields
+  that design needs. Still unvalidated: the generic chapter-list/content
+  extraction heuristic needs 2-3 real target site URLs to design against
+  properly (see "Open problem: book discovery" in that doc).
+- Scaffold the Next.js app (reader UI, dictionary editor, scraper) per
+  `docs/ARCHITECTURE.md` — not started yet. Part of that work is a
   one-time import script loading `dictionary_seed.db` into the Postgres
-  schema above (via the reserved "global" Novel row for names), after
-  which `packages/tokenizer` should be pointed at Prisma instead of
-  SQLite directly.
+  schema (via the reserved "global" Novel row for names), after which
+  `packages/tokenizer` should be pointed at Prisma instead of SQLite
+  directly.
 - Phase 2: implement the `rule.txt`-style grammar-reorder DSL for real
   readability gains beyond phrase substitution (see docs for details).
