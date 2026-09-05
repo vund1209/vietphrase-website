@@ -11,7 +11,11 @@ test("capitalizes the first word of a line", () => {
 });
 
 test("capitalizes after a full-width sentence-ending punctuation token", () => {
-  assert.equal(translateText("他好。他好"), "Hắn hảo 。 Hắn hảo");
+  // No space before the period itself -- see the "natural spacing" tests
+  // below -- but a normal space after it, before the next sentence. The
+  // fullwidth "。" is also normalized to a narrow "." (see the
+  // "fullwidth punctuation" test further down).
+  assert.equal(translateText("他好。他好"), "Hắn hảo. Hắn hảo");
 });
 
 test("does not capitalize mid-sentence words", () => {
@@ -21,6 +25,19 @@ test("does not capitalize mid-sentence words", () => {
 
 test("each paragraph (line) capitalizes independently", () => {
   assert.equal(translateText("他好\n他好"), "Hắn hảo\nHắn hảo");
+});
+
+test("a comma hugs the preceding word instead of floating with spaces on both sides", () => {
+  // See src/lib/tokenSpacing.ts for the full rule set.
+  assert.equal(translateText("他，好"), "Hắn, hảo");
+});
+
+test("fullwidth punctuation is normalized to its narrow ASCII equivalent", () => {
+  // Fullwidth "，" occupies a full CJK character cell (2-3x a narrow
+  // comma) -- left as-is it reads as a huge gap in otherwise-Latin text.
+  const [line] = tokenizeLines("他，好");
+  assert.equal(line[1].vietnamese, ",");
+  assert.equal(line[1].chinese, "，", "the raw Chinese reference is untouched");
 });
 
 test("capitalization only changes vietnamese, not rawVietnamese or hanViet", () => {

@@ -5,6 +5,7 @@
 import path from "node:path";
 import { VietPhraseTokenizer } from "@vietphrase/tokenizer";
 import type { TokenSource } from "@vietphrase/tokenizer";
+import { needsSpaceBetween } from "./tokenSpacing.ts";
 
 const DB_PATH = path.join(process.cwd(), "data", "seed", "dictionary_seed.db");
 
@@ -83,6 +84,41 @@ function applyCapStyles(line: DisplayToken[], capStyles?: Map<string, CapStyle>)
   });
 }
 
+// Punctuation has no dictionary entry, so it passes through the
+// "unmatched" fallback exactly as scraped -- but fullwidth CJK
+// punctuation (，。！？ etc.) is designed to occupy a full CJK character
+// cell, 2-3x wider than a narrow Latin comma/period. Left as-is, it
+// reads as broken/gappy in otherwise-Latin Vietnamese prose (a lone
+// fullwidth comma can render as wide as an entire short word). Normalize
+// to the narrow equivalents actually used in written Vietnamese --
+// `token.chinese` (used for span-selection/editing) is untouched, only
+// the displayed `vietnamese` changes.
+const FULLWIDTH_PUNCTUATION: Record<string, string> = {
+  "，": ",",
+  "。": ".",
+  "！": "!",
+  "？": "?",
+  "；": ";",
+  "：": ":",
+  "、": ",",
+  "（": "(",
+  "）": ")",
+  "【": "[",
+  "】": "]",
+  "“": "\"",
+  "”": "\"",
+  "‘": "'",
+  "’": "'",
+  "…": "...",
+};
+
+function normalizePunctuation(line: DisplayToken[]): DisplayToken[] {
+  return line.map((token) => {
+    const replacement = FULLWIDTH_PUNCTUATION[token.chinese];
+    return replacement ? { ...token, vietnamese: replacement } : token;
+  });
+}
+
 // The dictionary stores translations lowercase (it has no notion of
 // sentence position), so without this every sentence/paragraph reads
 // entirely lowercase -- capitalize the first letter of each line and of
@@ -135,8 +171,17 @@ export function tokenizeLines(
       hanViet: t.hanViet,
       capStyle: "NONE",
     }));
-    return applySentenceCapitalization(applyCapStyles(tokens, capStyles));
+    return applySentenceCapitalization(applyCapStyles(normalizePunctuation(tokens), capStyles));
   });
+}
+
+function joinTokensNaturally(tokens: DisplayToken[]): string {
+  let result = "";
+  tokens.forEach((t, i) => {
+    result += t.vietnamese;
+    if (i < tokens.length - 1 && needsSpaceBetween(t.chinese, tokens[i + 1].chinese)) result += " ";
+  });
+  return result;
 }
 
 /**
@@ -152,7 +197,7 @@ export function translateText(
   capStyles?: Map<string, CapStyle>
 ): string {
   return tokenizeLines(text, overrides, capStyles)
-    .map((line) => line.map((t) => t.vietnamese).join(" "))
+    .map((line) => joinTokensNaturally(line))
     .join("\n");
 }
 

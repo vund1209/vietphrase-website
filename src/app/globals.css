@@ -41,3 +41,14 @@ body {
 .prose-reading p {
   text-indent: 1.5em;
 }
+
+/* text-indent is inherited, and applies to the *first line* of any
+   descendant that establishes its own block/inline-block formatting
+   context -- not just the paragraph's own first line. ChapterReader.tsx
+   renders each word as its own `inline-block` span (for the per-word
+   click target), so without this reset, every single token silently
+   re-applied the 1.5em indent to itself, showing up as large, uneven
+   gaps between words instead of one indent at the paragraph's start. */
+.prose-reading p * {
+  text-indent: 0;
+}

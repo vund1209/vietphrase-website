@@ -9,6 +9,7 @@
 // overrides") unless promoted to the shared dictionary.
 import { useEffect, useMemo, useState } from "react";
 import type { DisplayToken, CapStyle } from "@/lib/tokenizer";
+import { needsSpaceBetween } from "@/lib/tokenSpacing";
 import { SpanEditor, type ReuseEntry } from "./SpanEditor";
 
 interface ChapterReaderProps {
@@ -198,6 +199,9 @@ export function ChapterReader({ novelSlug, lines, canPromote }: ChapterReaderPro
                   selection?.line === lineIndex &&
                   tokenIndex >= selection.start &&
                   tokenIndex <= selection.end;
+                const nextToken = line[tokenIndex + 1];
+                const trailingSpace =
+                  nextToken && needsSpaceBetween(token.chinese, nextToken.chinese) ? " " : "";
                 return (
                   <span key={tokenIndex} data-token="true" className="group relative inline-block">
                     <span
@@ -214,7 +218,8 @@ export function ChapterReader({ novelSlug, lines, canPromote }: ChapterReaderPro
                         isSelected ? "bg-yellow-200 dark:bg-yellow-800" : ""
                       }`}
                     >
-                      {token.vietnamese}{" "}
+                      {token.vietnamese}
+                      {trailingSpace}
                     </span>
                     <span className="pointer-events-none absolute bottom-full left-1/2 z-10 hidden -translate-x-1/2 whitespace-nowrap rounded bg-neutral-900 px-2 py-1 text-xs text-white group-hover:block dark:bg-neutral-100 dark:text-neutral-900">
                       {token.chinese} · {token.hanViet}
