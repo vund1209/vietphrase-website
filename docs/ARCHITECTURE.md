@@ -355,13 +355,16 @@ acceptable, but not designed in detail yet.
 
 ## User management and per-word overrides
 
-**Implementation status (2026-09-05): schema and application code
-written, migration not yet applied.** This needs `npx prisma migrate dev
---name add_user_word_overrides` (or similar) followed by `npx prisma
-generate` run on the real machine before any of it works end to end --
-same pattern as the `binaryTargets` fix in "Scraping strategy" above.
-Everything in this section typechecks against the *new* schema but not
-yet against the currently-generated Prisma Client, for the same reason.
+**Implementation status (2026-09-05): schema migrated and Prisma Client
+regenerated on the real machine; typechecks clean end to end.** Word-
+level Hán-Việt reading tooltips (see below) were added the same day,
+after the project owner reviewed sangtacviet.com's reader and asked for
+that specific feature. Still not verified against a real live chapter
+view end to end -- same Neon-egress-allowlist limitation documented in
+"Scraping strategy" applies here too (this assistant's bridged dev
+environment can't reach Neon directly), so the actual signed-in reading
+flow (sign up, click a word, save, see it reflected; promote as an
+editor) needs a manual pass on the real machine.
 
 **Why this exists:** researching sangtacviet.com (the reference site)
 turned up a feature this project didn't have yet -- every translated
@@ -413,13 +416,21 @@ or type their own correction, and promote whichever value they judge
 best.
 
 **Interactive reader** (`src/components/ChapterReader.tsx`): each
-translated token renders as its own clickable `<span>`. Clicking one
-opens an inline editor; saving posts to
-`/api/novels/[slug]/overrides` and optimistically updates every instance
-of that exact Chinese phrase in the currently-rendered chapter. Modeled
-on sangtacviet.com's per-word `<i>`-wrapped tokens (see the read-mechanic
-research that motivated this), minus their word-level Hán-Việt tooltip
-and text-to-speech layers -- deliberately out of scope here (see below).
+translated token renders as its own clickable `<span>`, wrapped with a
+hover tooltip showing the Chinese source and its Hán-Việt reading (see
+`docs/VIETPHRASE_CORE.md` "Han-Viet reading, alongside (not instead of)
+the phrase translation" for how `Token.hanViet` is computed -- this was
+explicitly requested after the sangtacviet.com research below, reversing
+this doc's earlier "deliberately out of scope" call on it). Clicking a
+token opens an inline editor showing both the Chinese and the Hán-Việt
+reading alongside the current translation, so a reader can use the
+literal reading as a reference when writing a better one; saving posts
+to `/api/novels/[slug]/overrides` and optimistically updates every
+instance of that exact Chinese phrase in the currently-rendered chapter.
+Modeled on sangtacviet.com's per-word `<i>`-wrapped tokens (see the
+read-mechanic research that motivated this), minus their text-to-speech
+layer -- still deliberately out of scope (see below); the project owner
+doesn't want audio/voice features.
 
 ## What's deliberately out of scope for v1
 
@@ -433,9 +444,10 @@ and text-to-speech layers -- deliberately out of scope here (see below).
   is designed against general knowledge of how these sites tend to be
   structured, not tested against real pages. Needs 2-3 real example URLs
   to validate against before this is trusted.
-- No word-level Hán-Việt reading tooltips or text-to-speech (sangtacviet.com
-  has both; this project's owner explicitly doesn't want audio/voice
-  features). Per-word click-to-edit is in scope; those two aren't.
+- No text-to-speech (sangtacviet.com has it; this project's owner
+  explicitly doesn't want audio/voice features). Word-level Hán-Việt
+  reading tooltips, unlike TTS, ARE in scope -- see "Interactive reader"
+  above.
 - No self-service READER→EDITOR upgrade path, no password reset/email
   verification flow, no OAuth sign-in -- all deliberately out of scope
   for a small, trusted-editor product (see "User management and per-word

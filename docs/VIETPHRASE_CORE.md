@@ -119,7 +119,36 @@ common rendering first, but this isn't verified), or make it
 context-sensitive later. This needs a decision before the tokenizer ships
 a v1, even a naive one (take-first is the obvious placeholder).
 
+### Han-Viet reading, alongside (not instead of) the phrase translation
+
+**Added 2026-09-05**, per the project owner's explicit request after
+reviewing sangtacviet.com's reader (see `docs/ARCHITECTURE.md` "User
+management and per-word overrides"). Every `Token` now carries a
+`hanViet` field: the character-by-character Sino-Vietnamese reading of
+`chinese`, computed independently of `vietnamese`.
+
+This is deliberately a *different* value from `vietnamese`, not a
+fallback for it: `vietnamese` is the contextual VietPhrase substitution
+(from `names`/`pronouns`/`words` -- a real phrase, name, or idiom, which
+is often nothing like a literal character-by-character reading);
+`hanViet` is always the literal reading, looked up per-character against
+`hanviet_fallback` (the same table already used as the last-resort
+fallback for a genuinely unmatched character -- see "The core loop"
+above), falling back to the raw character itself if even that table has
+no entry. It's computed for every token regardless of `source`
+(`name`/`pronoun`/`word`/`hanviet_fallback`/`unmatched` alike), because
+comparing "what VietPhrase chose" against "what the characters literally
+read as" is useful everywhere, not just for the unmatched-character path.
+
+Cost: one extra `hanviet_fallback` point lookup per character of every
+resolved token (`VietPhraseTokenizer._hanVietFor()` in
+`packages/tokenizer/src/tokenizer.mjs`), on top of the existing longest-
+match scan. For chapter-length text this is a modest, in-process SQLite
+overhead -- the same class of cost the tokenizer already pays during the
+longest-match scan itself, not a new order of magnitude.
+
 ## Validation, and the production module
+
 
 `prototype/tokenizer.mjs` is a zero-dependency Node script (uses the
 built-in, experimental `node:sqlite`) implementing the algorithm above

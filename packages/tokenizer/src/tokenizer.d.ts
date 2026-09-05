@@ -10,6 +10,12 @@ export interface Token {
   chinese: string;
   vietnamese: string;
   rawVietnamese: string;
+  /**
+   * Character-by-character Sino-Vietnamese reading of `chinese`,
+   * independent of `vietnamese` (the contextual VietPhrase
+   * substitution). Always populated.
+   */
+  hanViet: string;
 }
 
 export interface TokenizerOptions {

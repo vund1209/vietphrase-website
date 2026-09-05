@@ -86,21 +86,24 @@ export function ChapterReader({ novelSlug, lines }: ChapterReaderProps) {
           {line.length === 0
             ? " "
             : line.map((token, tokenIndex) => (
-                <span
-                  key={tokenIndex}
-                  role="button"
-                  tabIndex={0}
-                  title={token.chinese}
-                  onClick={() => openEditor(lineIndex, tokenIndex)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      openEditor(lineIndex, tokenIndex);
-                    }
-                  }}
-                  className="cursor-pointer rounded px-0.5 hover:bg-yellow-100 dark:hover:bg-yellow-900"
-                >
-                  {token.vietnamese}{" "}
+                <span key={tokenIndex} className="group relative inline-block">
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => openEditor(lineIndex, tokenIndex)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        openEditor(lineIndex, tokenIndex);
+                      }
+                    }}
+                    className="cursor-pointer rounded px-0.5 hover:bg-yellow-100 dark:hover:bg-yellow-900"
+                  >
+                    {token.vietnamese}{" "}
+                  </span>
+                  <span className="pointer-events-none absolute bottom-full left-1/2 z-10 hidden -translate-x-1/2 whitespace-nowrap rounded bg-neutral-900 px-2 py-1 text-xs text-white group-hover:block dark:bg-neutral-100 dark:text-neutral-900">
+                    {token.chinese} · {token.hanViet}
+                  </span>
                 </span>
               ))}
         </p>
@@ -110,8 +113,9 @@ export function ChapterReader({ novelSlug, lines }: ChapterReaderProps) {
         <div className="fixed inset-x-0 bottom-0 z-50 border-t border-neutral-200 bg-white p-4 shadow-lg dark:border-neutral-800 dark:bg-neutral-900">
           <div className="mx-auto flex max-w-3xl flex-col gap-2">
             <div className="text-sm text-neutral-500">
-              Chữ Hán: <span className="font-medium">{selectedToken.chinese}</span> (sửa chỉ áp
-              dụng cho riêng bạn)
+              Chữ Hán: <span className="font-medium">{selectedToken.chinese}</span> · Hán Việt:{" "}
+              <span className="font-medium">{selectedToken.hanViet}</span> (sửa chỉ áp dụng cho
+              riêng bạn)
             </div>
             <div className="flex gap-2">
               <input

@@ -89,6 +89,7 @@ export default function TranslatePage() {
             <tr className="border-b border-neutral-300 dark:border-neutral-700">
               <th className="py-1 pr-4">Nguồn</th>
               <th className="py-1 pr-4">Chữ Hán</th>
+              <th className="py-1 pr-4">Hán Việt</th>
               <th className="py-1 pr-4">Vietphrase</th>
               <th className="py-1">Các lựa chọn khác</th>
             </tr>
@@ -98,6 +99,7 @@ export default function TranslatePage() {
               <tr key={i} className="border-b border-neutral-100 dark:border-neutral-800">
                 <td className="py-1 pr-4 text-neutral-500">{t.source}</td>
                 <td className="py-1 pr-4">{t.chinese}</td>
+                <td className="py-1 pr-4 text-neutral-500">{t.hanViet}</td>
                 <td className="py-1 pr-4">{t.vietnamese}</td>
                 <td className="py-1 text-neutral-500">
                   {t.rawVietnamese !== t.vietnamese ? t.rawVietnamese : ""}

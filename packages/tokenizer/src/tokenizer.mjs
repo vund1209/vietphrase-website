@@ -47,6 +47,12 @@ import { DatabaseSync } from "node:sqlite";
  * @property {string} chinese - the matched (or single unmatched) substring
  * @property {string} vietnamese - the chosen alternative, per pickAlternative
  * @property {string} rawVietnamese - the full stored value, possibly "a/b/c"
+ * @property {string} hanViet - the character-by-character Sino-Vietnamese
+ *   reading of `chinese`, independent of `vietnamese` (which is the
+ *   contextual VietPhrase substitution, often a real phrase/name rather
+ *   than a literal reading). Always populated, for every token, not just
+ *   the "hanviet_fallback"/"unmatched" sources -- lets a reader compare
+ *   the literal reading against the contextual translation for any word.
  */
 
 /**
@@ -149,7 +155,35 @@ export class VietPhraseTokenizer {
 
   /** @private */
   _toToken(source, chinese, rawVietnamese) {
-    return { source, chinese, vietnamese: this.pickAlternative(rawVietnamese), rawVietnamese };
+    return {
+      source,
+      chinese,
+      vietnamese: this.pickAlternative(rawVietnamese),
+      rawVietnamese,
+      hanViet: this._hanVietFor(chinese),
+    };
+  }
+
+  /**
+   * Character-by-character Sino-Vietnamese reading of `text`, via the
+   * same `hanviet_fallback` table used for genuinely unmatched
+   * characters -- but called for every token here, not just those,
+   * since a reader comparing "the literal reading" vs "the phrase
+   * VietPhrase chose" is useful for any matched name/pronoun/word too,
+   * not only fallback characters. Falls back to the raw character for
+   * any character with no reading on file (rare -- `hanviet_fallback`
+   * is built to cover the common CJK range, see
+   * `data/seed/build_dictionary.py`).
+   * @private
+   */
+  _hanVietFor(text) {
+    let result = "";
+    for (const ch of text) {
+      const hv = this._stmtHanviet.get(ch);
+      const reading = hv ? this.pickAlternative(hv.hanviet_readings) : ch;
+      result += result ? ` ${reading}` : reading;
+    }
+    return result;
   }
 
   /** @private */

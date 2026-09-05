@@ -38,6 +38,13 @@ function buildTestDb() {
   insertHv.run("龘", "đạp");
   // deliberately no entry anywhere for "龘" 's neighbor char used below
 
+  // Per-character Han-Viet readings for "测试", independent of (and
+  // deliberately different in wording from) its "word" table entry
+  // above -- exercises hanViet being computed separately from
+  // vietnamese even for a matched (non-fallback) token.
+  insertHv.run("测", "trắc");
+  insertHv.run("试", "thí/thử");
+
   insertName.run("萧炎", "Tiêu Viêm", 2, null); // global
 
   setup.close();
@@ -132,6 +139,58 @@ test("pickAlternative is pluggable", () => {
   });
   const tokens = tok.tokenize("测试");
   assert.equal(tokens[0].vietnamese, "thử nghiệm");
+  tok.close();
+  cleanup();
+});
+
+
+test("every token carries a hanViet reading, independent of vietnamese", () => {
+  const { dbPath, cleanup } = buildTestDb();
+  const tok = new VietPhraseTokenizer(dbPath);
+  const tokens = tok.tokenize("测试");
+  assert.equal(tokens.length, 1);
+  assert.equal(tokens[0].vietnamese, "kiểm tra");
+  // Per-character reading, joined with a space -- not the phrase-table
+  // translation above, and not required to match it.
+  assert.equal(tokens[0].hanViet, "trắc thí");
+  tok.close();
+  cleanup();
+});
+
+test("hanViet falls back to the raw character when it has no reading on file", () => {
+  const { dbPath, cleanup } = buildTestDb();
+  const tok = new VietPhraseTokenizer(dbPath);
+  // "萧炎" matches the global `names` table but neither character has a
+  // hanviet_fallback row in this test db.
+  const tokens = tok.tokenize("萧炎");
+  assert.equal(tokens[0].vietnamese, "Tiêu Viêm");
+  assert.equal(tokens[0].hanViet, "萧 炎");
+  tok.close();
+  cleanup();
+});
+
+test("hanViet's per-character reading respects pickAlternative too", () => {
+  const { dbPath, cleanup } = buildTestDb();
+  const tok = new VietPhraseTokenizer(dbPath, {
+    pickAlternative: (alts) => alts.split("/").pop(),
+  });
+  const tokens = tok.tokenize("测试");
+  assert.equal(tokens[0].hanViet, "trắc thử");
+  tok.close();
+  cleanup();
+});
+
+test("hanViet for a genuinely unmatched character equals its fallback reading (or itself)", () => {
+  const { dbPath, cleanup } = buildTestDb();
+  const tok = new VietPhraseTokenizer(dbPath);
+  const fallbackToken = tok.tokenize("龘")[0];
+  assert.equal(fallbackToken.source, "hanviet_fallback");
+  assert.equal(fallbackToken.vietnamese, "đạp");
+  assert.equal(fallbackToken.hanViet, "đạp");
+
+  const unmatchedToken = tok.tokenize("龍")[0];
+  assert.equal(unmatchedToken.source, "unmatched");
+  assert.equal(unmatchedToken.hanViet, "龍");
   tok.close();
   cleanup();
 });

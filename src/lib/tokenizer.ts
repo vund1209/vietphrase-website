@@ -21,6 +21,14 @@ export interface DisplayToken {
   chinese: string;
   vietnamese: string;
   source: TokenSource;
+  /**
+   * Character-by-character Sino-Vietnamese reading of `chinese`,
+   * independent of `vietnamese` -- shown in the interactive reader's
+   * hover tooltip and edit panel so a reader can compare the literal
+   * reading against the contextual VietPhrase translation. See
+   * docs/ARCHITECTURE.md "User management and per-word overrides".
+   */
+  hanViet: string;
 }
 
 /**
@@ -42,6 +50,7 @@ export function tokenizeLines(text: string, overrides?: Map<string, string>): Di
       chinese: t.chinese,
       vietnamese: t.vietnamese,
       source: t.source,
+      hanViet: t.hanViet,
     }));
   });
 }

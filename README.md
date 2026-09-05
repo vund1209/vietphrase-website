@@ -137,18 +137,19 @@ the app exists.
   add-book form and confirm a chapter reads correctly. If either real
   site's structure trips up the generic extractor, add a per-site
   adapter (`src/lib/extract/adapters.ts`) for it.
-- **New, pending one setup step**: user accounts (email + password,
+- **Done, migration applied**: user accounts (email + password,
   READER/EDITOR roles) and per-word interactive overrides -- click any
-  translated word while reading, save a fix that's private to you, and
-  (if you're an EDITOR) promote a good fix into the shared dictionary
-  everyone sees. See `docs/ARCHITECTURE.md` "User management and
-  per-word overrides" for the full design and why. **Before this works**:
-  run `npx prisma migrate dev --name add_user_word_overrides` (or
-  similar) then `npx prisma generate` on the real machine, same as the
-  `binaryTargets` step above -- the new `User`/`UserWordOverride` models
-  and the `Name.promotedByUserId` column don't exist in the database or
-  the generated client yet. Also needs a real `AUTH_SECRET` in `.env`
-  for anything beyond your own machine (a dev-only one was generated
-  locally; see `.env.example`).
+  translated word while reading to see its Hán-Việt reading and its
+  VietPhrase translation side by side, save a fix that's private to you,
+  and (if you're an EDITOR) promote a good fix into the shared
+  dictionary everyone sees. `npx prisma migrate dev` +
+  `npx prisma generate` have been run on the real machine; typecheck and
+  lint are clean. See `docs/ARCHITECTURE.md` "User management and
+  per-word overrides" for the full design. **Still needed**: a real
+  `AUTH_SECRET` in `.env` for anything beyond your own machine (a
+  dev-only one was generated locally; see `.env.example`), and a manual
+  end-to-end pass (sign up, edit a word, promote as an editor) since
+  this assistant's dev environment can't reach Neon directly (same
+  limitation as the scraping end-to-end test above).
 - Phase 2: implement the `rule.txt`-style grammar-reorder DSL for real
   readability gains beyond phrase substitution (see docs for details).
