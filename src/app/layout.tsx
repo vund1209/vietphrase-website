@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Noto_Serif } from "next/font/google";
 import Link from "next/link";
 import "./globals.css";
 import { AuthSessionProvider } from "@/components/AuthSessionProvider";
@@ -15,6 +15,13 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+// Serif face for chapter body text (see .prose-reading in globals.css) --
+// "latin-ext" is required for Vietnamese diacritics beyond plain Latin.
+const notoSerif = Noto_Serif({
+  variable: "--font-reading",
+  subsets: ["latin", "latin-ext"],
+});
+
 export const metadata: Metadata = {
   title: "VietPhrase",
   description: "Chinese to Vietnamese novel translation, VietPhrase-style.",
@@ -24,7 +31,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="vi"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} ${notoSerif.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
         <AuthSessionProvider>
@@ -34,6 +41,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
                 VietPhrase
               </Link>
               <Link href="/translate">Dịch nhanh</Link>
+              <Link href="/search">Tìm truyện</Link>
               <AuthNav />
             </nav>
           </header>

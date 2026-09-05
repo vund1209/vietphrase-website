@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 // One-off utility: re-fetch a novel's source landing page and backfill
-// description/coverImageUrl/author/originalTitle + a translated title --
-// for novels added before Phase 4's metadata-scraping change, whose
-// these columns are still null. Does not touch chapters.
+// coverImageUrl/author/originalTitle/originalDescription + translated
+// title/description -- for novels added before the metadata-scraping and
+// description-translation changes, whose these columns are still
+// null/untranslated. Does not touch chapters.
 //
 // Usage: node scripts/backfill-novel-metadata.mjs <slug>
 import path from "node:path";
@@ -80,20 +81,23 @@ async function main() {
     const html = await res.text();
 
     const originalTitle = extractPageTitle(html)?.trim() || novel.title;
-    const description = extractDescription(html);
+    const originalDescription = extractDescription(html);
     const coverImageUrl = extractCoverImageUrl(html);
     const author = extractAuthor(html);
 
     const dbPath = path.join(process.cwd(), "data", "seed", "dictionary_seed.db");
     const tokenizer = new VietPhraseTokenizer(dbPath);
-    const title = tokenizer
-      .tokenize(originalTitle, {})
-      .map((t) => t.vietnamese)
-      .join(" ");
+    const translate = (text) =>
+      tokenizer
+        .tokenize(text, {})
+        .map((t) => t.vietnamese)
+        .join(" ");
+    const title = translate(originalTitle);
+    const description = originalDescription ? translate(originalDescription) : null;
 
     const updated = await prisma.novel.update({
       where: { id: novel.id },
-      data: { originalTitle, title, description, coverImageUrl, author },
+      data: { originalTitle, title, originalDescription, description, coverImageUrl, author },
     });
     console.log("Backfilled:", JSON.stringify(updated, null, 2));
   } finally {

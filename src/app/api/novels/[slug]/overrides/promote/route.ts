@@ -24,7 +24,7 @@ export async function POST(
   const { slug } = await params;
   const novel = await prisma.novel.findUnique({
     where: { slug },
-    select: { id: true, originalTitle: true },
+    select: { id: true, originalTitle: true, originalDescription: true },
   });
   if (!novel) {
     return Response.json({ error: "Novel not found" }, { status: 404 });
@@ -73,10 +73,15 @@ export async function POST(
   // they stay in sync with the dictionary rather than going stale until
   // some other trigger re-translates them (there isn't one otherwise).
   const freshOverrides = await loadNovelOverrides(novel.id);
-  if (novel.originalTitle) {
+  if (novel.originalTitle || novel.originalDescription) {
     await prisma.novel.update({
       where: { id: novel.id },
-      data: { title: translateText(novel.originalTitle, freshOverrides) },
+      data: {
+        ...(novel.originalTitle && { title: translateText(novel.originalTitle, freshOverrides) }),
+        ...(novel.originalDescription && {
+          description: translateText(novel.originalDescription, freshOverrides),
+        }),
+      },
     });
   }
   const chaptersWithOriginalTitle = await prisma.chapter.findMany({

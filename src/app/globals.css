@@ -10,6 +10,7 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-reading: var(--font-reading);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -23,4 +24,20 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Chapter body text -- shared by the interactive ChapterReader and the
+   static cached-text fallback, so signed-in and anonymous readers get
+   the same reading experience. Narrower column + serif face + generous
+   line-height + first-line paragraph indent reads more like a novel than
+   the app's default UI typography. */
+.prose-reading {
+  max-width: 42rem;
+  margin-inline: auto;
+  font-family: var(--font-reading), Georgia, serif;
+  line-height: 2;
+}
+
+.prose-reading p {
+  text-indent: 1.5em;
 }

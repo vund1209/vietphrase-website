@@ -73,7 +73,10 @@ model Novel {
   // promotion) without re-scraping. Null for novels added before this
   // column existed.
   originalTitle String?
+  // Translated (Vietnamese) description -- see originalTitle above for
+  // why the raw/translated split exists. Searchable alongside title.
   description   String?
+  originalDescription String?
   author        String?
   sourceUrl     String?
   coverImageUrl String?

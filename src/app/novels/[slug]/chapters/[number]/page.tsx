@@ -71,8 +71,10 @@ export default async function ChapterPage({
           canPromote={isEditorOrAdmin(session?.user?.role)}
         />
       ) : (
-        <article className="whitespace-pre-wrap text-lg leading-relaxed">
-          {result.chapter.translatedText}
+        <article className="prose-reading text-lg">
+          {(result.chapter.translatedText ?? "").split("\n").map((line, i) => (
+            <p key={i}>{line || " "}</p>
+          ))}
         </article>
       )}
 
