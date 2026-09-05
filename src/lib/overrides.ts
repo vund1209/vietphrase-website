@@ -4,6 +4,38 @@
 // candidate substring.
 import { prisma } from "@/lib/prisma";
 
+// Bounds for a user-submitted override's chineseText/vietnameseText,
+// shared by both write routes (personal save and shared-dictionary
+// promote). A span can never legitimately cross a paragraph break
+// (tokenLines is already split per "\n"), and these caps just keep
+// runaway input (and the tokenizer's override-length-driven scan window)
+// bounded -- see docs/VIETPHRASE_CORE.md "Open decisions".
+export const MAX_OVERRIDE_PHRASE_LENGTH = 60;
+export const MAX_TRANSLATION_LENGTH = 200;
+export const MAX_TRANSLATION_SEGMENTS = 8;
+
+export function validateOverridePair(
+  chineseText: string,
+  vietnameseText: string
+): string | null {
+  if (!chineseText || !vietnameseText) {
+    return "chineseText and vietnameseText are both required";
+  }
+  if (chineseText.includes("\n")) {
+    return "chineseText cannot span multiple lines";
+  }
+  if (chineseText.length > MAX_OVERRIDE_PHRASE_LENGTH) {
+    return `chineseText must be at most ${MAX_OVERRIDE_PHRASE_LENGTH} characters`;
+  }
+  if (vietnameseText.length > MAX_TRANSLATION_LENGTH) {
+    return `vietnameseText must be at most ${MAX_TRANSLATION_LENGTH} characters`;
+  }
+  if (vietnameseText.split("/").length > MAX_TRANSLATION_SEGMENTS) {
+    return `vietnameseText can have at most ${MAX_TRANSLATION_SEGMENTS} "/"-separated options`;
+  }
+  return null;
+}
+
 /** The shared, editor-curated per-novel dictionary every reader sees. */
 export async function loadNovelOverrides(novelId: number): Promise<Map<string, string>> {
   const rows = await prisma.name.findMany({

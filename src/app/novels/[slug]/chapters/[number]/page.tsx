@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { auth } from "@/lib/auth";
+import { auth, isEditorOrAdmin } from "@/lib/auth";
 import {
   ChapterNotFoundError,
   ScrapeFailedError,
@@ -65,7 +65,11 @@ export default async function ChapterPage({
         Chương {chapterNumber}: {result.chapter.title}
       </h1>
       {result.tokens ? (
-        <ChapterReader novelSlug={slug} lines={result.tokens} />
+        <ChapterReader
+          novelSlug={slug}
+          lines={result.tokens}
+          canPromote={isEditorOrAdmin(session?.user?.role)}
+        />
       ) : (
         <article className="whitespace-pre-wrap text-lg leading-relaxed">
           {result.chapter.translatedText}

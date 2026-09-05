@@ -20,6 +20,13 @@ export function getTokenizer(): VietPhraseTokenizer {
 export interface DisplayToken {
   chinese: string;
   vietnamese: string;
+  /**
+   * The full stored value behind `vietnamese`, e.g. "a/b/c" if the
+   * dictionary entry has multiple candidate translations -- `vietnamese`
+   * is just pickAlternative's first pick. Exposed so the span editor can
+   * show/edit every candidate, not just the one currently displayed.
+   */
+  rawVietnamese: string;
   source: TokenSource;
   /**
    * Character-by-character Sino-Vietnamese reading of `chinese`,
@@ -49,6 +56,7 @@ export function tokenizeLines(text: string, overrides?: Map<string, string>): Di
     return tok.tokenize(line, { overrides }).map((t) => ({
       chinese: t.chinese,
       vietnamese: t.vietnamese,
+      rawVietnamese: t.rawVietnamese,
       source: t.source,
       hanViet: t.hanViet,
     }));

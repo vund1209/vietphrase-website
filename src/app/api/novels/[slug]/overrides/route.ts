@@ -5,6 +5,7 @@
 // ./promote/route.ts).
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { validateOverridePair } from "@/lib/overrides";
 
 async function resolveNovelId(slug: string): Promise<number | null> {
   const novel = await prisma.novel.findUnique({ where: { slug }, select: { id: true } });
@@ -55,11 +56,9 @@ export async function POST(
   const vietnameseText =
     typeof body?.vietnameseText === "string" ? body.vietnameseText.trim() : "";
 
-  if (!chineseText || !vietnameseText) {
-    return Response.json(
-      { error: "chineseText and vietnameseText are both required" },
-      { status: 400 }
-    );
+  const validationError = validateOverridePair(chineseText, vietnameseText);
+  if (validationError) {
+    return Response.json({ error: validationError }, { status: 400 });
   }
 
   const userId = Number(session.user.id);

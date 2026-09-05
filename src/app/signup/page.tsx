@@ -5,6 +5,9 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { signIn } from "next-auth/react";
 
+// Kept in sync with src/app/api/auth/signup/route.ts's EMAIL_RE.
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export default function SignupPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -14,9 +17,14 @@ export default function SignupPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setSubmitting(true);
     setError(null);
 
+    if (!EMAIL_RE.test(email.trim())) {
+      setError("Vui lòng nhập một địa chỉ email hợp lệ");
+      return;
+    }
+
+    setSubmitting(true);
     const res = await fetch("/api/auth/signup", {
       method: "POST",
       headers: { "Content-Type": "application/json" },

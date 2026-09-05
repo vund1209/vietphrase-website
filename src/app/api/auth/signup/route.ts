@@ -7,13 +7,19 @@ import { prisma } from "@/lib/prisma";
 
 const MIN_PASSWORD_LENGTH = 8;
 
+// Pragmatic (not full-RFC-5322) email check: requires a local part, an
+// "@", and a domain with at least one "." -- enough to reject a bare
+// username or an "@"-only string without the false-negative risk of a
+// stricter pattern.
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export async function POST(request: Request): Promise<Response> {
   const body = await request.json().catch(() => null);
   const email = typeof body?.email === "string" ? body.email.trim().toLowerCase() : "";
   const password = typeof body?.password === "string" ? body.password : "";
 
-  if (!email || !email.includes("@")) {
-    return Response.json({ error: "A valid email is required" }, { status: 400 });
+  if (!EMAIL_RE.test(email)) {
+    return Response.json({ error: "Vui lòng nhập một địa chỉ email hợp lệ" }, { status: 400 });
   }
   if (password.length < MIN_PASSWORD_LENGTH) {
     return Response.json(

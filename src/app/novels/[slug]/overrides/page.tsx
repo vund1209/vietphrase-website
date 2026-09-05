@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { auth } from "@/lib/auth";
+import { auth, isEditorOrAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { PromoteOverrideButton } from "@/components/PromoteOverrideButton";
 
@@ -29,7 +29,7 @@ export default async function NovelOverridesPage({
     orderBy: { updatedAt: "desc" },
   });
 
-  const isEditor = session.user.role === "EDITOR";
+  const isEditor = isEditorOrAdmin(session.user.role);
 
   return (
     <main className="mx-auto flex max-w-3xl flex-1 flex-col gap-4 p-6">

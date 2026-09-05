@@ -4,8 +4,10 @@
 // than a specific UserWordOverride id, so an editor can review any
 // reader's suggestion (or type their own correction) and promote
 // whichever value they judge best -- not necessarily their own.
-import { auth } from "@/lib/auth";
+import { auth, isEditorOrAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { translateText } from "@/lib/tokenizer";
+import { loadNovelOverrides, validateOverridePair } from "@/lib/overrides";
 
 export async function POST(
   request: Request,
@@ -15,12 +17,15 @@ export async function POST(
   if (!session?.user) {
     return Response.json({ error: "Sign in required" }, { status: 401 });
   }
-  if (session.user.role !== "EDITOR") {
+  if (!isEditorOrAdmin(session.user.role)) {
     return Response.json({ error: "Editor role required" }, { status: 403 });
   }
 
   const { slug } = await params;
-  const novel = await prisma.novel.findUnique({ where: { slug }, select: { id: true } });
+  const novel = await prisma.novel.findUnique({
+    where: { slug },
+    select: { id: true, originalTitle: true },
+  });
   if (!novel) {
     return Response.json({ error: "Novel not found" }, { status: 404 });
   }
@@ -30,11 +35,9 @@ export async function POST(
   const vietnameseText =
     typeof body?.vietnameseText === "string" ? body.vietnameseText.trim() : "";
 
-  if (!chineseText || !vietnameseText) {
-    return Response.json(
-      { error: "chineseText and vietnameseText are both required" },
-      { status: 400 }
-    );
+  const validationError = validateOverridePair(chineseText, vietnameseText);
+  if (validationError) {
+    return Response.json({ error: validationError }, { status: 400 });
   }
 
   const editorId = Number(session.user.id);
@@ -65,6 +68,29 @@ export async function POST(
     where: { novelId: novel.id, status: "TRANSLATED" },
     data: { translatedText: null, status: "SCRAPED" },
   });
+
+  // Titles are short strings -- cheap to redo synchronously here too, so
+  // they stay in sync with the dictionary rather than going stale until
+  // some other trigger re-translates them (there isn't one otherwise).
+  const freshOverrides = await loadNovelOverrides(novel.id);
+  if (novel.originalTitle) {
+    await prisma.novel.update({
+      where: { id: novel.id },
+      data: { title: translateText(novel.originalTitle, freshOverrides) },
+    });
+  }
+  const chaptersWithOriginalTitle = await prisma.chapter.findMany({
+    where: { novelId: novel.id, originalTitle: { not: null } },
+    select: { id: true, originalTitle: true },
+  });
+  await Promise.all(
+    chaptersWithOriginalTitle.map((c) =>
+      prisma.chapter.update({
+        where: { id: c.id },
+        data: { title: translateText(c.originalTitle as string, freshOverrides) },
+      })
+    )
+  );
 
   return Response.json({ name });
 }

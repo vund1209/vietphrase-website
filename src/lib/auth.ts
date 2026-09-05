@@ -10,6 +10,22 @@ import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 
+type AppUserRole = "READER" | "EDITOR" | "ADMIN";
+
+function coerceRole(role: unknown): AppUserRole {
+  return role === "ADMIN" || role === "EDITOR" ? role : "READER";
+}
+
+// ADMIN is a superset of EDITOR for shared-dictionary promotion rights;
+// only ADMIN can delete a novel. See prisma/schema.prisma's UserRole enum.
+export function isEditorOrAdmin(role: unknown): boolean {
+  return role === "EDITOR" || role === "ADMIN";
+}
+
+export function isAdmin(role: unknown): boolean {
+  return role === "ADMIN";
+}
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
   session: { strategy: "jwt" },
   pages: { signIn: "/login" },
@@ -46,14 +62,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     jwt({ token, user }) {
       if (user) {
         token.id = String(user.id);
-        token.role = user.role === "EDITOR" ? "EDITOR" : "READER";
+        token.role = coerceRole(user.role);
       }
       return token;
     },
     session({ session, token }) {
       if (session.user) {
         session.user.id = typeof token.id === "string" ? token.id : "";
-        session.user.role = token.role === "EDITOR" ? "EDITOR" : "READER";
+        session.user.role = coerceRole(token.role);
       }
       return session;
     },

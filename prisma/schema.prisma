@@ -68,6 +68,12 @@ model Novel {
   id            Int         @id @default(autoincrement())
   slug          String      @unique
   title         String
+  // Raw scraped title (source language), preserved so the translated
+  // `title` above can be recomputed later (e.g. after a dictionary
+  // promotion) without re-scraping. Null for novels added before this
+  // column existed.
+  originalTitle String?
+  description   String?
   author        String?
   sourceUrl     String?
   coverImageUrl String?
@@ -98,6 +104,12 @@ model Chapter {
   novel          Novel         @relation(fields: [novelId], references: [id], onDelete: Cascade)
   chapterNumber  Int
   title          String
+  // Raw scraped chapter title, same reasoning as Novel.originalTitle.
+  originalTitle  String?
+  // Best-effort chapter ID parsed from the tail of `sourceUrl` (e.g. the
+  // source site's own chapter ID). Reference/dedup only -- chapterNumber
+  // remains the sequential index this app routes on.
+  sourceChapterId String?
   sourceUrl      String
   rawText        String? // Chinese; null until first scraped
   translatedText String? // Vietnamese; null until first translated
@@ -179,6 +191,10 @@ model User {
 enum UserRole {
   READER
   EDITOR
+  // Superset of EDITOR (inherits shared-dictionary promotion rights) --
+  // the only role that can delete a novel from the library. No
+  // self-service upgrade path; see scripts/set-user-role.mjs.
+  ADMIN
 }
 
 /// A reader's *private* word/phrase override for one novel -- visible

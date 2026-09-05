@@ -1,11 +1,13 @@
 import { prisma } from "@/lib/prisma";
-import { fetchChapterList } from "@/lib/scraper";
-import { slugify, withSuffix } from "@/lib/slug";
+import { fetchChapterList, extractSourceChapterId } from "@/lib/scraper";
+import { slugFromSourceUrl, withSuffix } from "@/lib/slug";
+import { translateText } from "@/lib/tokenizer";
 
 export interface NovelSummary {
   slug: string;
   title: string;
   author: string | null;
+  coverImageUrl: string | null;
   sourceUrl: string | null;
   status: string;
   chapterCount: number;
@@ -22,6 +24,7 @@ export async function GET(): Promise<Response> {
     slug: n.slug,
     title: n.title,
     author: n.author,
+    coverImageUrl: n.coverImageUrl,
     sourceUrl: n.sourceUrl,
     status: n.status,
     chapterCount: n._count.chapters,
@@ -59,8 +62,10 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ error: message }, { status: 422 });
   }
 
-  const title = fetched.bookTitle?.trim() || `Truyện chưa đặt tên (${new URL(url).hostname})`;
-  const baseSlug = slugify(title);
+  const originalTitle =
+    fetched.bookTitle?.trim() || `Truyện chưa đặt tên (${new URL(url).hostname})`;
+  const title = translateText(originalTitle);
+  const baseSlug = slugFromSourceUrl(url);
 
   // `data/seed/dictionary_seed.db` reasoning aside, this is a small
   // table (one row per novel) -- a loop-until-free slug check is fine.
@@ -73,13 +78,19 @@ export async function POST(request: Request): Promise<Response> {
     data: {
       slug,
       title,
+      originalTitle,
+      description: fetched.description,
+      coverImageUrl: fetched.coverImageUrl,
+      author: fetched.author,
       sourceUrl: url,
       status: "READY",
       chapters: {
         createMany: {
           data: fetched.chapters.map((c, i) => ({
             chapterNumber: i + 1,
-            title: c.title,
+            title: translateText(c.title),
+            originalTitle: c.title,
+            sourceChapterId: extractSourceChapterId(c.url),
             sourceUrl: c.url,
             status: "PENDING",
           })),

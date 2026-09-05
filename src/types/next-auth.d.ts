@@ -10,7 +10,7 @@
 // compatible (Prisma's enum values are these same strings at runtime).
 import type { DefaultSession } from "next-auth";
 
-type AppUserRole = "READER" | "EDITOR";
+type AppUserRole = "READER" | "EDITOR" | "ADMIN";
 
 declare module "next-auth" {
   interface Session {

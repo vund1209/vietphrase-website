@@ -1,16 +1,22 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
+import { auth, isAdmin } from "@/lib/auth";
 import { AddBookForm } from "./AddBookForm";
+import { DeleteNovelButton } from "@/components/DeleteNovelButton";
 
 // Library/reader pages show live, per-request data (novels/chapters get
 // added and translated at runtime) -- never statically prerender these.
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
-  const novels = await prisma.novel.findMany({
-    orderBy: { createdAt: "desc" },
-    include: { _count: { select: { chapters: true } } },
-  });
+  const [novels, session] = await Promise.all([
+    prisma.novel.findMany({
+      orderBy: { createdAt: "desc" },
+      include: { _count: { select: { chapters: true } } },
+    }),
+    auth(),
+  ]);
+  const canDelete = isAdmin(session?.user?.role);
 
   return (
     <main className="mx-auto flex max-w-3xl flex-1 flex-col gap-6 p-6">
@@ -54,16 +60,29 @@ export default async function HomePage() {
         ) : (
           <ul className="flex flex-col gap-2">
             {novels.map((novel) => (
-              <li key={novel.slug}>
-                <Link
-                  href={`/novels/${novel.slug}`}
-                  className="block rounded-md border border-neutral-300 p-3 hover:bg-neutral-50 dark:border-neutral-700 dark:hover:bg-neutral-900"
-                >
+              <li
+                key={novel.slug}
+                className="flex items-center gap-3 rounded-md border border-neutral-300 p-3 hover:bg-neutral-50 dark:border-neutral-700 dark:hover:bg-neutral-900"
+              >
+                {novel.coverImageUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- arbitrary hotlinked third-party hosts, not in next.config's image allowlist
+                  <img
+                    src={novel.coverImageUrl}
+                    alt=""
+                    className="h-16 w-12 shrink-0 rounded object-cover"
+                  />
+                ) : (
+                  <div className="h-16 w-12 shrink-0 rounded bg-neutral-200 dark:bg-neutral-800" />
+                )}
+                <Link href={`/novels/${novel.slug}`} className="flex-1">
                   <div className="font-medium">{novel.title}</div>
                   <div className="text-sm text-neutral-500">
                     {novel._count.chapters} chương
                   </div>
                 </Link>
+                {canDelete && (
+                  <DeleteNovelButton novelSlug={novel.slug} novelTitle={novel.title} />
+                )}
               </li>
             ))}
           </ul>

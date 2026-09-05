@@ -27,6 +27,60 @@ function extractPageTitle(html: string): string | null {
   return match ? match[1].trim() || null : null;
 }
 
+// Generic, site-agnostic metadata extraction via standard <meta> tags --
+// no per-site adapter needed, same nullable-if-absent pattern as
+// extractPageTitle above. Confirmed as the right approach by reviewing
+// how sangtacviet.com's own embed of book.sfacg.com/Novel/530508/
+// displays a description/author and hotlinks a cover image straight from
+// the source (http://rs.sfacg.com/...): these are exactly the values a
+// well-behaved novel-hosting page already puts in og:description/
+// og:image/meta[name=author] for link-preview purposes.
+function extractMetaContent(html: string, ...patterns: RegExp[]): string | null {
+  for (const re of patterns) {
+    const match = html.match(re);
+    if (match) {
+      const value = match[1].trim();
+      if (value) return value;
+    }
+  }
+  return null;
+}
+
+function extractDescription(html: string): string | null {
+  return extractMetaContent(
+    html,
+    /<meta[^>]+property=["']og:description["'][^>]*content=["']([^"']*)["'][^>]*>/i,
+    /<meta[^>]+content=["']([^"']*)["'][^>]*property=["']og:description["'][^>]*>/i,
+    /<meta[^>]+name=["']description["'][^>]*content=["']([^"']*)["'][^>]*>/i,
+    /<meta[^>]+content=["']([^"']*)["'][^>]*name=["']description["'][^>]*>/i
+  );
+}
+
+function extractCoverImageUrl(html: string): string | null {
+  return extractMetaContent(
+    html,
+    /<meta[^>]+property=["']og:image["'][^>]*content=["']([^"']*)["'][^>]*>/i,
+    /<meta[^>]+content=["']([^"']*)["'][^>]*property=["']og:image["'][^>]*>/i
+  );
+}
+
+function extractAuthor(html: string): string | null {
+  return extractMetaContent(
+    html,
+    /<meta[^>]+name=["']author["'][^>]*content=["']([^"']*)["'][^>]*>/i,
+    /<meta[^>]+content=["']([^"']*)["'][^>]*name=["']author["'][^>]*>/i
+  );
+}
+
+// Best-effort ID parsed from the tail of a chapter's source URL (e.g. a
+// site's own numeric chapter ID) -- reference/dedup only, not used for
+// routing. Mirrors how sangtacviet.com's own chapter URLs preserve the
+// source site's chapter ID rather than inventing a new one.
+export function extractSourceChapterId(chapterUrl: string): string | null {
+  const match = chapterUrl.match(/(\d+)\/?$/);
+  return match ? match[1] : null;
+}
+
 // Real novel sites often split a "book" into a landing/intro page and a
 // separate chapter-list (table of contents) page one hop away -- e.g.
 // book.sfacg.com links from its landing page to /Novel/<id>/MainIndex/
@@ -70,6 +124,9 @@ export function findTocLink(html: string, pageUrl: string): string | null {
 
 export interface FetchedChapterList {
   bookTitle: string | null;
+  description: string | null;
+  coverImageUrl: string | null;
+  author: string | null;
   chapters: ChapterListItem[];
 }
 
@@ -102,7 +159,17 @@ export async function fetchChapterList(bookUrl: string): Promise<FetchedChapterL
     );
   }
 
-  return { bookTitle: extractPageTitle(html), chapters };
+  // Metadata (description/cover/author) always comes from the originally
+  // requested landing page, not a followed table-of-contents hop -- a
+  // TOC page is typically just a chapter list, while the landing page is
+  // where a site puts its og:description/og:image/meta[author] tags.
+  return {
+    bookTitle: extractPageTitle(html),
+    description: extractDescription(html),
+    coverImageUrl: extractCoverImageUrl(html),
+    author: extractAuthor(html),
+    chapters,
+  };
 }
 
 export interface FetchedChapterContent {
