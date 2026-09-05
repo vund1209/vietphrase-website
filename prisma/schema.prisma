@@ -45,8 +45,12 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  // Pooled connection (PgBouncer/Supavisor) — used by the app at runtime.
+  url       = env("DATABASE_URL")
+  // Direct, unpooled connection — used only by `prisma migrate`/`db push`.
+  // Same host as DATABASE_URL minus the pooler, per docs/ENVIRONMENT.md.
+  directUrl = env("DIRECT_URL")
 }
 
 /// Every novel/story being translated, plus one reserved row (slug

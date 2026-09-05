@@ -220,15 +220,33 @@ not yet implemented -- `packages/tokenizer` still talks to SQLite
 directly as of this writing. Flagging it here so it isn't forgotten once
 the Prisma migration work starts.
 
-## Hosting: cloud Postgres free tier
+## Hosting: cloud Postgres free tier — Neon
 
-Decided: a cloud free-tier Postgres provider (Neon or Supabase), not a
-self-hosted database, for v1 -- no infra to manage, generous enough free
-tier for a project at this stage. Not yet narrowed to one specific
-provider; either is Prisma-compatible. Once picked, the real
-`DATABASE_URL` goes in a local `.env` (never committed -- copy the root
-`.env.example`), and this doc should be updated to say which was chosen
-and why.
+Decided: **Neon**, over Supabase, for v1. Both are Prisma-compatible
+free-tier options; Neon fits this project better on two points that
+matter here specifically:
+
+- **Idle behavior.** Neon's free compute autosuspends after 5 minutes of
+  inactivity and transparently resumes on the next query (a few hundred
+  ms of cold-start latency, no action needed). Supabase instead **pauses
+  the whole project after 1 week of inactivity**, and someone has to
+  manually unpause it from the dashboard before it responds again -- a
+  real annoyance for a project with irregular dev/usage activity, and
+  restorable for only up to a year before the data is gone for good.
+- **Scope.** This project only needs Postgres + Prisma. Neon is a
+  focused Postgres product; Supabase bundles Auth, Storage, Realtime, and
+  Edge Functions that this app has no plans to use, which is unnecessary
+  surface area for a project that's trying to stay clean and minimal.
+
+Free tier limits worth knowing: 0.5 GB storage, ~100 compute-hours/month,
+up to 100 projects / 10 branches each, built-in connection pooler, 5 GB
+egress/month (checked 2026-09; verify against neon.tech/pricing if this
+gets stale). Prisma needs **two** connection strings against Neon: a
+pooled `DATABASE_URL` (host has `-pooler` in it) for the running app, and
+a direct/unpooled `DIRECT_URL` for `prisma migrate` — both are declared
+in `prisma/schema.prisma`'s `datasource` block and documented with
+examples in the root `.env.example`. The real values go in a local `.env`
+(never committed).
 
 ## Open problem: discovering the parent book from a single chapter URL
 
