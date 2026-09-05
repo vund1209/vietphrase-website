@@ -71,16 +71,24 @@ export async function getOrTranslateChapter(
     return { chapter, novel: novelSummary, tokens };
   }
 
-  // Lazy scrape + translate, first view only.
+  // Reuse existing raw text if we already have it -- e.g. after a
+  // dictionary promotion resets translatedText/status to force a
+  // re-translate (see .../overrides/promote/route.ts's comment: "rawText
+  // is untouched and still valid"). Only scrape when there's truly no
+  // raw text yet, so a dictionary change never re-hits the source site.
   let rawText: string;
-  try {
-    const fetched = await fetchChapterContent(chapter.sourceUrl);
-    rawText = fetched.rawText;
-  } catch (err) {
-    await prisma.chapter.update({ where: { id: chapter.id }, data: { status: "ERROR" } });
-    throw new ScrapeFailedError(
-      err instanceof Error ? err.message : "Failed to scrape chapter"
-    );
+  if (chapter.rawText) {
+    rawText = chapter.rawText;
+  } else {
+    try {
+      const fetched = await fetchChapterContent(chapter.sourceUrl);
+      rawText = fetched.rawText;
+    } catch (err) {
+      await prisma.chapter.update({ where: { id: chapter.id }, data: { status: "ERROR" } });
+      throw new ScrapeFailedError(
+        err instanceof Error ? err.message : "Failed to scrape chapter"
+      );
+    }
   }
 
   const sharedOverrides = await loadNovelOverrides(novel.id);
@@ -92,7 +100,7 @@ export async function getOrTranslateChapter(
       rawText,
       translatedText,
       status: "TRANSLATED",
-      scrapedAt: new Date(),
+      scrapedAt: chapter.scrapedAt ?? new Date(),
       translatedAt: new Date(),
     },
   });

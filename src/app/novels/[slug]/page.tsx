@@ -62,24 +62,42 @@ export default async function NovelPage({
           {canDelete && (
             <CompletionStatusToggle novelSlug={novel.slug} current={novel.completionStatus} />
           )}
-          {novel.originalTitle && novel.originalTitle !== novel.title && (
-            <p className="text-sm text-neutral-500">Nguyên tác: {novel.originalTitle}</p>
-          )}
-          {hanViet && <p className="text-sm text-neutral-500">Hán Việt: {hanViet}</p>}
-          {novel.author && (
-            <p className="text-sm text-neutral-500">Tác giả: {novel.author}</p>
-          )}
+
           {novel.description && (
             <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-300">
               {novel.description}
             </p>
           )}
-          {novel.sourceUrl && (
-            <p className="text-sm text-neutral-500 break-all">
-              Nguồn: {novel.sourceUrl}
-            </p>
-          )}
-          <p className="text-sm text-neutral-500">Xuất hiện lần đầu: {firstAppear}</p>
+
+          <dl className="mt-2 grid grid-cols-[max-content_1fr] gap-x-3 gap-y-1 text-sm text-neutral-500">
+            {novel.originalTitle && novel.originalTitle !== novel.title && (
+              <>
+                <dt className="shrink-0">Nguyên tác</dt>
+                <dd>{novel.originalTitle}</dd>
+              </>
+            )}
+            {hanViet && (
+              <>
+                <dt className="shrink-0">Hán Việt</dt>
+                <dd>{hanViet}</dd>
+              </>
+            )}
+            {novel.author && (
+              <>
+                <dt className="shrink-0">Tác giả</dt>
+                <dd>{novel.author}</dd>
+              </>
+            )}
+            {novel.sourceUrl && (
+              <>
+                <dt className="shrink-0">Nguồn</dt>
+                <dd className="break-all">{novel.sourceUrl}</dd>
+              </>
+            )}
+            <dt className="shrink-0">Xuất hiện lần đầu</dt>
+            <dd>{firstAppear}</dd>
+          </dl>
+
           <div className="mt-2 flex items-center gap-4">
             <Link href={`/novels/${novel.slug}/overrides`} className="text-sm underline">
               Từ đã sửa của bạn

@@ -38,6 +38,35 @@ export interface DisplayToken {
   hanViet: string;
 }
 
+// The dictionary stores translations lowercase (it has no notion of
+// sentence position), so without this every sentence/paragraph reads
+// entirely lowercase -- capitalize the first letter of each line and of
+// whatever follows a sentence-ending punctuation token. Punctuation is
+// its own token (an "unmatched" passthrough, since the dictionary has no
+// entries for it), so this only ever touches token boundaries, never
+// splits a word.
+const SENTENCE_END_RE = /^[.!?。！？]+$/;
+
+function capitalizeFirstLetter(text: string): string {
+  return text.replace(/^([^\p{L}]*)(\p{L})/u, (_, lead: string, letter: string) => lead + letter.toUpperCase());
+}
+
+function applySentenceCapitalization(line: DisplayToken[]): DisplayToken[] {
+  let capitalizeNext = true;
+  return line.map((token) => {
+    const chinese = token.chinese.trim();
+    const shouldCapitalize = capitalizeNext;
+    if (SENTENCE_END_RE.test(chinese)) {
+      capitalizeNext = true;
+    } else if (chinese.length > 0) {
+      capitalizeNext = false;
+    }
+    if (!shouldCapitalize) return token;
+    const vietnamese = capitalizeFirstLetter(token.vietnamese);
+    return vietnamese === token.vietnamese ? token : { ...token, vietnamese };
+  });
+}
+
 /**
  * Tokenizes raw chapter text line by line (preserving paragraph breaks,
  * which the scraper's extractChapterContent already normalized to one
@@ -53,13 +82,14 @@ export function tokenizeLines(text: string, overrides?: Map<string, string>): Di
   const tok = getTokenizer();
   return text.split("\n").map((line) => {
     if (!line.trim()) return [];
-    return tok.tokenize(line, { overrides }).map((t) => ({
+    const tokens = tok.tokenize(line, { overrides }).map((t) => ({
       chinese: t.chinese,
       vietnamese: t.vietnamese,
       rawVietnamese: t.rawVietnamese,
       source: t.source,
       hanViet: t.hanViet,
     }));
+    return applySentenceCapitalization(tokens);
   });
 }
 
