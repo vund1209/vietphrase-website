@@ -11,8 +11,14 @@ beyond the standalone `packages/tokenizer` module. See
 `docs/DICTIONARY_SOURCES.md` for how the seed dictionary was built,
 `docs/VIETPHRASE_CORE.md` for how the translation engine itself works, and
 `docs/ARCHITECTURE.md` for how the site's three features (reading library,
-"live scrape/surf", translate page) fit together as one pipeline — all
-written before the app exists so none of it gets lost.
+"live scrape/surf", translate page) fit together as one pipeline, and
+`docs/ENVIRONMENT.md` for the exact Python/Node/npm versions this runs on
+— all written before the app exists so none of it gets lost.
+
+**Read `docs/ENVIRONMENT.md` before assuming anything here "just works"**:
+most of this repo was built and tested through a bridged environment
+running different Node/Python versions than the real target machine —
+that doc explains exactly what's unverified and how to check it.
 
 ## Structure
 
@@ -29,7 +35,10 @@ vietphrase-website/
 ├── docs/
 │   ├── ARCHITECTURE.md                 # product architecture: how the site's 3 features fit together
 │   ├── VIETPHRASE_CORE.md              # how the translation engine works (algorithm, open decisions)
+│   ├── ENVIRONMENT.md                  # exact tool versions this runs on, and a version-gap caveat
 │   └── DICTIONARY_SOURCES.md           # full source evaluation + build report
+├── .nvmrc                              # pins Node to the versions in ENVIRONMENT.md
+├── .python-version                     # pins Python to the versions in ENVIRONMENT.md
 ├── packages/
 │   └── tokenizer/                      # production tokenizer module (tested, no npm deps)
 ├── prisma/
