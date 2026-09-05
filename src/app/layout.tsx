@@ -42,6 +42,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
               </Link>
               <Link href="/translate">Dịch nhanh</Link>
               <Link href="/search">Tìm truyện</Link>
+              <Link href="/surf">Đọc web</Link>
               <AuthNav />
             </nav>
           </header>
