@@ -2,18 +2,16 @@
 // novel context) and the reading-library chapter routes (per-novel
 // overrides, see docs/ARCHITECTURE.md "Data split"). One SQLite
 // connection per process, opened lazily on first use.
-import path from "node:path";
 import { VietPhraseTokenizer } from "@vietphrase/tokenizer";
 import type { TokenSource } from "@vietphrase/tokenizer";
 import { needsSpaceBetween } from "./tokenSpacing.ts";
-
-const DB_PATH = path.join(process.cwd(), "data", "seed", "dictionary_seed.db");
+import { resolveDbPath } from "./dictionaryDb.ts";
 
 let tokenizer: VietPhraseTokenizer | undefined;
 
 export function getTokenizer(): VietPhraseTokenizer {
   if (!tokenizer) {
-    tokenizer = new VietPhraseTokenizer(DB_PATH);
+    tokenizer = new VietPhraseTokenizer(resolveDbPath());
   }
   return tokenizer;
 }

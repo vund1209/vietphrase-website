@@ -2,6 +2,12 @@
 # reproducible via the `git clone` commands in docs/DICTIONARY_SOURCES.md.
 ref/
 
+# Bulk dictionary seed (~216 MB) — too large for a normal git push and
+# not committed via Git LFS (Vercel doesn't resolve LFS pointers). Built
+# locally via data/seed/build_dictionary.py, or downloaded automatically
+# at runtime from a GitHub Release asset — see src/lib/dictionaryDb.ts.
+data/seed/dictionary_seed.db
+
 # Python
 __pycache__/
 *.pyc
