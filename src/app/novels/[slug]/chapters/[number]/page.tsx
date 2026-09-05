@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { auth, isEditorOrAdmin } from "@/lib/auth";
+import { auth, isEditorOrAdmin, isAdmin } from "@/lib/auth";
 import {
   ChapterNotFoundError,
   ScrapeFailedError,
@@ -9,6 +9,7 @@ import {
 } from "@/lib/novels";
 import { ChapterReader } from "@/components/ChapterReader";
 import { ReadingProgressPing } from "@/components/ReadingProgressPing";
+import { RefetchChapterButton } from "@/components/RefetchChapterButton";
 
 // Library/reader pages show live, per-request data (novels/chapters get
 // added and translated at runtime) -- never statically prerender these.
@@ -63,14 +64,20 @@ export default async function ChapterPage({
         </span>
       </div>
 
-      <h1 className="text-xl font-semibold">
-        Chương {chapterNumber}: {result.chapter.title}
-      </h1>
+      <div className="flex items-center justify-between gap-2">
+        <h1 className="text-xl font-semibold">
+          Chương {chapterNumber}: {result.chapter.title}
+        </h1>
+        {isAdmin(session?.user?.role) && (
+          <RefetchChapterButton novelSlug={slug} chapterNumber={chapterNumber} />
+        )}
+      </div>
       {result.tokens ? (
         <ChapterReader
           novelSlug={slug}
           lines={result.tokens}
           canPromote={isEditorOrAdmin(session?.user?.role)}
+          canApplyGlobally={isAdmin(session?.user?.role)}
         />
       ) : (
         <article className="prose-reading text-lg">

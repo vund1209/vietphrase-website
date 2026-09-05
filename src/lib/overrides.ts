@@ -68,6 +68,28 @@ export async function loadNovelOverrides(novelId: number): Promise<OverrideLayer
 }
 
 /**
+ * Admin-curated corrections that apply to every novel -- see
+ * prisma/schema.prisma's GlobalWordOverride model. Lowest priority of
+ * the three override layers (loses to per-novel Name, which loses to a
+ * reader's own UserWordOverride) -- see mergeLayers below.
+ */
+export async function loadGlobalWordOverrides(): Promise<OverrideLayer> {
+  const rows = await prisma.globalWordOverride.findMany({
+    where: { isActive: true },
+    select: { chineseText: true, vietnameseText: true, capStyle: true },
+  });
+  return toOverrideLayer(rows);
+}
+
+/** Merges override layers in priority order -- later layers win on a shared key. */
+function mergeLayers(...layers: OverrideLayer[]): OverrideLayer {
+  return {
+    translations: new Map(layers.flatMap((l) => [...l.translations])),
+    capStyles: new Map(layers.flatMap((l) => [...l.capStyles])),
+  };
+}
+
+/**
  * One reader's *private* word overrides for one novel -- never shared
  * with other readers unless an editor promotes one into the novel's
  * shared Name dictionary above. See docs/ARCHITECTURE.md "User
@@ -85,22 +107,29 @@ export async function loadUserWordOverrides(
 }
 
 /**
+ * The full override layer for anonymous/no-personal-override reading:
+ * global corrections, with the novel's own shared dictionary winning on
+ * a shared key (more specific beats less specific).
+ */
+export async function loadOverridesForNovel(novelId: number): Promise<OverrideLayer> {
+  const [global, shared] = await Promise.all([loadGlobalWordOverrides(), loadNovelOverrides(novelId)]);
+  return mergeLayers(global, shared);
+}
+
+/**
  * The full override layer for a specific reader viewing a specific
- * novel: the shared dictionary, with that reader's own private
- * overrides layered on top so a personal correction always wins over
- * the shared value (but never the reverse -- another reader's private
- * override never affects what this reader sees).
+ * novel: global corrections, then the novel's shared dictionary, then
+ * that reader's own private overrides layered on top so a personal
+ * correction always wins (but never the reverse -- another reader's
+ * private override never affects what this reader sees).
  */
 export async function loadOverridesForUser(
   novelId: number,
   userId: number
 ): Promise<OverrideLayer> {
-  const [shared, personal] = await Promise.all([
-    loadNovelOverrides(novelId),
+  const [globalAndShared, personal] = await Promise.all([
+    loadOverridesForNovel(novelId),
     loadUserWordOverrides(novelId, userId),
   ]);
-  return {
-    translations: new Map([...shared.translations, ...personal.translations]),
-    capStyles: new Map([...shared.capStyles, ...personal.capStyles]),
-  };
+  return mergeLayers(globalAndShared, personal);
 }

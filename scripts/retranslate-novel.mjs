@@ -74,10 +74,19 @@ async function main() {
       process.exit(1);
     }
 
-    const overrideRows = await prisma.name.findMany({
-      where: { novelId: novel.id, isActive: true },
-      select: { chineseText: true, vietnameseText: true, capStyle: true },
-    });
+    const [globalRows, novelRows] = await Promise.all([
+      prisma.globalWordOverride.findMany({
+        where: { isActive: true },
+        select: { chineseText: true, vietnameseText: true, capStyle: true },
+      }),
+      prisma.name.findMany({
+        where: { novelId: novel.id, isActive: true },
+        select: { chineseText: true, vietnameseText: true, capStyle: true },
+      }),
+    ]);
+    // Per-novel Name wins over a global override for the same phrase --
+    // same precedence as src/lib/overrides.ts's mergeLayers.
+    const overrideRows = [...globalRows, ...novelRows];
     const overrides = new Map(overrideRows.map((r) => [r.chineseText, r.vietnameseText]));
     const capStyles = new Map(overrideRows.map((r) => [r.chineseText, r.capStyle]));
 

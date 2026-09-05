@@ -16,6 +16,7 @@ interface ChapterReaderProps {
   novelSlug: string;
   lines: DisplayToken[][];
   canPromote: boolean;
+  canApplyGlobally: boolean;
 }
 
 interface SpanSelection {
@@ -46,7 +47,12 @@ function applyCapStyleClient(text: string, style: CapStyle): string {
   return text;
 }
 
-export function ChapterReader({ novelSlug, lines, canPromote }: ChapterReaderProps) {
+export function ChapterReader({
+  novelSlug,
+  lines,
+  canPromote,
+  canApplyGlobally,
+}: ChapterReaderProps) {
   const [tokenLines, setTokenLines] = useState(lines);
   const [selection, setSelection] = useState<SpanSelection | null>(null);
   const [hanViet, setHanViet] = useState("");
@@ -247,10 +253,12 @@ export function ChapterReader({ novelSlug, lines, canPromote }: ChapterReaderPro
           onExpandLeft={() => expand("left")}
           onExpandRight={() => expand("right")}
           canPromote={canPromote}
+          canApplyGlobally={canApplyGlobally}
           saving={saving}
           error={error}
           onSavePersonal={() => submit(`/api/novels/${novelSlug}/overrides`)}
           onPromote={() => submit(`/api/novels/${novelSlug}/overrides/promote`)}
+          onApplyGlobal={() => submit("/api/dictionary/global")}
           onReuseEntry={reuseEntry}
           onClose={closeEditor}
         />

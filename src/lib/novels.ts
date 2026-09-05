@@ -12,7 +12,7 @@ import type { Chapter, Novel } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { fetchChapterContent } from "@/lib/scraper";
 import { translateText, tokenizeLines, type DisplayToken } from "@/lib/tokenizer";
-import { loadNovelOverrides, loadOverridesForUser } from "@/lib/overrides";
+import { loadOverridesForNovel, loadOverridesForUser } from "@/lib/overrides";
 
 export class ChapterNotFoundError extends Error {}
 export class ScrapeFailedError extends Error {}
@@ -79,7 +79,7 @@ export async function getOrTranslateChapter(
   }
 
   if (userId === undefined) {
-    const { translations, capStyles } = await loadNovelOverrides(novel.id);
+    const { translations, capStyles } = await loadOverridesForNovel(novel.id);
     const translatedText = translateText(rawText, translations, capStyles);
     return { chapter: updated, novel: novelSummary, translatedText };
   }

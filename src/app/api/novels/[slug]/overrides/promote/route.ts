@@ -7,7 +7,7 @@
 import { auth, isEditorOrAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { translateText } from "@/lib/tokenizer";
-import { loadNovelOverrides, validateOverridePair, validateCapStyle } from "@/lib/overrides";
+import { loadOverridesForNovel, validateOverridePair, validateCapStyle } from "@/lib/overrides";
 
 export async function POST(
   request: Request,
@@ -70,7 +70,7 @@ export async function POST(
   // Chapter *body* text needs no such step: it's rendered live from
   // rawText on every view (see src/lib/novels.ts), so it already reflects
   // this change on the very next request.
-  const freshOverrides = await loadNovelOverrides(novel.id);
+  const freshOverrides = await loadOverridesForNovel(novel.id);
   if (novel.originalTitle || novel.originalDescription) {
     await prisma.novel.update({
       where: { id: novel.id },

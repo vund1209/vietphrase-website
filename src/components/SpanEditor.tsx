@@ -41,10 +41,12 @@ interface SpanEditorProps {
   onExpandLeft: () => void;
   onExpandRight: () => void;
   canPromote: boolean;
+  canApplyGlobally: boolean;
   saving: boolean;
   error: string | null;
   onSavePersonal: () => void;
   onPromote: () => void;
+  onApplyGlobal: () => void;
   onReuseEntry: (entry: ReuseEntry) => void;
   onClose: () => void;
 }
@@ -65,10 +67,12 @@ export function SpanEditor({
   onExpandLeft,
   onExpandRight,
   canPromote,
+  canApplyGlobally,
   saving,
   error,
   onSavePersonal,
   onPromote,
+  onApplyGlobal,
   onReuseEntry,
   onClose,
 }: SpanEditorProps) {
@@ -314,6 +318,17 @@ export function SpanEditor({
               className="rounded-md border border-neutral-300 px-3 py-2 disabled:opacity-50 dark:border-neutral-700"
             >
               Thêm vào từ điển chung
+            </button>
+          )}
+          {canApplyGlobally && (
+            <button
+              type="button"
+              onClick={onApplyGlobal}
+              disabled={saving}
+              className="rounded-md border border-amber-400 px-3 py-2 text-amber-700 disabled:opacity-50 dark:border-amber-700 dark:text-amber-400"
+              title="Áp dụng cho mọi truyện, không chỉ truyện này"
+            >
+              Áp dụng cho tất cả truyện
             </button>
           )}
           <Link

@@ -188,6 +188,32 @@ enum NameCapStyle {
   ALL_WORDS // capitalize the first letter of every word (full proper names)
 }
 
+/// Admin-curated corrections that apply across EVERY novel -- unlike
+/// `Name` (scoped to one novel) or `UserWordOverride` (scoped to one
+/// reader, one novel), there was previously no way to fix a translation
+/// once and have it apply everywhere. Checked with lower priority than
+/// per-novel `Name` (which in turn loses to a reader's own
+/// `UserWordOverride`) -- see src/lib/overrides.ts's merge order. Still
+/// doesn't duplicate the bulk SQLite dictionary: like `Name`, this stays
+/// a small, sparse table of corrections, not a copy of the ~226MB seed
+/// data. See docs/PLANNED_FEATURES.md.
+model GlobalWordOverride {
+  id             Int          @id @default(autoincrement())
+  chineseText    String       @unique
+  vietnameseText String
+  capStyle       NameCapStyle @default(NONE)
+  phraseLength   Int
+  source         String
+  isActive       Boolean      @default(true)
+  createdById    Int?
+  createdByUser  User?        @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([phraseLength])
+  @@map("global_word_overrides")
+}
+
 /// A registered reader/editor account. Credentials auth only (email +
 /// bcrypt-hashed password) -- see docs/ARCHITECTURE.md "User management
 /// and per-word overrides" for why: this is a small, trusted-editor
@@ -210,6 +236,8 @@ model User {
   // Reverse side of Name.promotedByUser above -- no explicit @relation
   // needed since Name<->User has only one FK linking them.
   promotedNames Name[]
+  // Reverse side of GlobalWordOverride.createdByUser above.
+  globalWordOverrides GlobalWordOverride[]
 
   @@map("users")
 }
