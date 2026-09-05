@@ -4,6 +4,13 @@
 // nothing saved (no Novel/Chapter rows) -- different from the homepage's
 // add-by-URL, which permanently embeds a novel with a chapter list. See
 // docs/PLANNED_FEATURES.md and src/app/api/surf/route.ts.
+//
+// Two flavors: "Xem" below does a one-shot flat-text fetch+translate.
+// "Duyệt như trang gốc" instead opens /surf/browse -- a real
+// link-clickable proxy of the site (menu, chapter links, table of
+// contents) with translation applied in place, for actually navigating
+// around a site rather than reading one page at a time.
+import Link from "next/link";
 import { useState } from "react";
 
 interface SurfResult {
@@ -67,7 +74,20 @@ export default function SurfPage() {
         >
           {loading ? "Đang tải..." : "Xem"}
         </button>
+        <Link
+          href={url.trim() ? `/surf/browse?url=${encodeURIComponent(url.trim())}` : "#"}
+          aria-disabled={!url.trim()}
+          className={`rounded-md border border-neutral-300 px-4 py-2 dark:border-neutral-700 ${
+            !url.trim() ? "pointer-events-none opacity-40" : ""
+          }`}
+        >
+          Duyệt như trang gốc
+        </Link>
       </div>
+      <p className="text-xs text-neutral-400">
+        &quot;Duyệt như trang gốc&quot; mở một bản sao có thể bấm liên kết (menu, mục lục, chương) --
+        chỉ điều hướng, không có tính năng tương tác phức tạp (tìm kiếm, đăng nhập...).
+      </p>
 
       <label className="flex items-center gap-2 text-sm text-neutral-500">
         <input
