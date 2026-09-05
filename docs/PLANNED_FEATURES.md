@@ -1,11 +1,10 @@
-# Planned features (not yet built)
+# Planned features
 
 Captured from a design conversation so the reasoning isn't lost across a
-Claude Code usage reset. Nothing here is implemented yet -- treat this as
-the starting brief for whoever (human or Claude) picks these up next,
-not a changelog.
+Claude Code usage reset. Items 1 and 2 are now built (see commit
+`10c4e88`); item 3 (Surf mode) is not yet started.
 
-## 1. A real global/base dictionary override (distinct from per-novel `Name`)
+## 1. A real global/base dictionary override (distinct from per-novel `Name`) -- DONE
 
 **The gap**: today there are three places a translation can live --
 1. The bulk dictionary (`words`/`pronouns`/`hanviet_fallback`/global
@@ -74,7 +73,7 @@ applies unchanged.
 - Migration: purely additive (one new table), no changes to existing
   ones.
 
-## 2. Manual "re-fetch from source" per chapter
+## 2. Manual "re-fetch from source" per chapter -- DONE
 
 **The gap**: `getOrTranslateChapter` (`src/lib/novels.ts`) only ever
 scrapes when `rawText` is `NULL` -- once a chapter has been fetched
@@ -129,17 +128,11 @@ the library.
   already get), and revisit adding the interactive editor once #1 is in
   place.
 
-## Suggested build order
+## Status
 
-1. **Global dictionary overrides** (#1) -- independently valuable right
-   now (fixes the "have to repeat every correction per-novel" problem),
-   and unblocks a sane edit target for #3.
-2. **Manual re-fetch** (#2) -- small, fully isolated, no dependencies on
-   the other two.
-3. **Surf mode** (#3) -- benefits from #1 existing first if the
-   interactive editor is wanted, but the read-only version doesn't
-   strictly need to wait.
-
-None of this is built yet -- come back to each with the same
-plan-first-then-verify-live-in-the-browser workflow used for every
-other feature this project has shipped so far.
+1. **Global dictionary overrides** -- done (`10c4e88`).
+2. **Manual re-fetch** -- done (`10c4e88`).
+3. **Surf mode** -- not started. Unblocked now that #1 exists (an edit
+   made while surfing has somewhere sensible to land -- the global
+   table). Come back to it with the same plan-first-then-verify
+   workflow used for everything else.
