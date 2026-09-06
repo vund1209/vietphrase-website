@@ -15,6 +15,13 @@ import { checkRateLimit, getClientIp } from "@/lib/rateLimit";
 // attempt is exactly the brute-force-guessing surface that benefits most
 // from a strict cap. See the planning doc's section 11.
 const LOGIN_RATE_LIMIT = { windowMs: 15 * 60 * 1000, max: 10 };
+// Per-account lockout, same cap as the IP limit above -- an attacker
+// rotating IPs (or targeting one victim from many machines) could
+// otherwise brute-force a single account indefinitely despite the IP
+// cap. Reuses checkRateLimit's same bucket/hash mechanism, keyed by the
+// normalized email instead of an IP -- it's just an opaque string to
+// hash there, nothing IP-specific about the function itself.
+const LOGIN_ACCOUNT_RATE_LIMIT = { windowMs: 15 * 60 * 1000, max: 10 };
 
 type AppUserRole = "READER" | "EDITOR" | "ADMIN";
 
@@ -43,13 +50,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials, request) {
-        const rateLimit = await checkRateLimit("login", getClientIp(request), LOGIN_RATE_LIMIT);
-        if (!rateLimit.allowed) return null;
-
         const email =
           typeof credentials?.email === "string" ? credentials.email.trim().toLowerCase() : "";
         const password = typeof credentials?.password === "string" ? credentials.password : "";
         if (!email || !password) return null;
+
+        const [ipLimit, accountLimit] = await Promise.all([
+          checkRateLimit("login", getClientIp(request), LOGIN_RATE_LIMIT),
+          checkRateLimit("login-account", email, LOGIN_ACCOUNT_RATE_LIMIT),
+        ]);
+        if (!ipLimit.allowed || !accountLimit.allowed) return null;
 
         const user = await prisma.user.findUnique({ where: { email } });
         if (!user) return null;

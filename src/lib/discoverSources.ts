@@ -39,7 +39,23 @@ const SFACG_SOURCE: DiscoverSource = {
   },
 };
 
-export const DISCOVER_SOURCES: DiscoverSource[] = [SFACG_SOURCE];
+// 69shuba.com/novels/hot (rankings): confirmed live to render 50 books
+// per page in the initial HTML. No confirmed pagination pattern this
+// session (two guessed URL shapes both 404'd, not shipping a guess) and
+// no confirmed sort variant beyond this one rankings view -- `page`/
+// `sort` are accepted for interface consistency but currently both
+// resolve to this same single URL, a known rough edge rather than a
+// silently-wrong guess.
+const SHUBA_SOURCE: DiscoverSource = {
+  id: "69shuba",
+  displayName: "69书吧 (69shuba.com)",
+  hostname: "www.69shuba.com",
+  buildListUrl() {
+    return "https://www.69shuba.com/novels/hot";
+  },
+};
+
+export const DISCOVER_SOURCES: DiscoverSource[] = [SFACG_SOURCE, SHUBA_SOURCE];
 
 export function getDiscoverSource(id: string): DiscoverSource | null {
   return DISCOVER_SOURCES.find((s) => s.id === id) ?? null;

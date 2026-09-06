@@ -89,10 +89,15 @@ back so the schema can be fixed; it just couldn't be caught earlier here.
   bridge -- `next dev` logs a warning and falls back to a system font.
   Not a real bug, just another sandbox network gap; expected to work
   normally on the real machine.
-- `npm audit` currently reports 3 high-severity advisories in
-  `deepmerge-ts` (pulled in via `@prisma/config` via `prisma`) -- a
-  stack-exhaustion DoS report. Not fixed with `npm audit fix --force`
-  because that would force a breaking `prisma` version change for a
-  dev-only CLI tool that never processes untrusted input in this
-  project. Worth revisiting when Prisma ships a fix upstream, but not
-  urgent.
+- **Resolved (2026-09-06)**: the 3 high-severity `deepmerge-ts` advisories
+  (via `@prisma/config` via `prisma`) are fixed -- a plain `npm audit fix`
+  (no `--force`, no major-version jump) resolved them within the existing
+  `^6` range by settling on `prisma`/`@prisma/engines`/`@prisma/config` at
+  `6.12.0`, a version before `@prisma/config` started depending on
+  `deepmerge-ts` at all. `@prisma/client` is pinned to the same `6.12.0`
+  (exact, not `^6`) to keep the CLI and generated client in lockstep --
+  Prisma's own guidance is to never let these drift apart. Confirmed
+  `npx prisma generate`, `tsc`, `eslint`, `npm test`, and `next build` all
+  still pass at this pinned version. Revisit the pin once Prisma ships a
+  patched `@prisma/config` upstream (check via `npm view @prisma/config@latest dependencies`
+  for a non-vulnerable `deepmerge-ts` before unpinning either package).

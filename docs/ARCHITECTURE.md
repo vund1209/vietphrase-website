@@ -15,14 +15,16 @@ tiebreaker, and concrete samples from it (like the translate-endpoint
 contract below) should be treated as informed precedent, not just
 inspiration.
 
-**Status (2026-09-05): the translate page is scaffolded and working.** The
-Next.js app now exists (`src/app/`), and `POST /api/translate` calls
-`packages/tokenizer` directly against `data/seed/dictionary_seed.db` --
-verified end to end to reproduce the real sangtacviet.com sample below
-exactly. The reading library (surfaces 1/2) and the Postgres/Prisma
-backend are still design-only; see "Data access: avoid per-lookup DB
-round-trips" below for a correction that must land before the tokenizer
-is pointed at Postgres.
+**Status (2026-09-06): all three surfaces are built and live.** The
+translate page (`POST /api/translate`) calls `packages/tokenizer`
+directly against the dictionary seed file -- verified end to end to
+reproduce the real sangtacviet.com sample below exactly. The reading
+library (surfaces 1/2) and the Postgres/Prisma backend described below
+are fully built and in production, not design-only: embedding,
+per-novel/global/personal dictionary overrides, self-created novels,
+Discover mode, and Tags all ship on top of this design. "Data access:
+avoid per-lookup DB round-trips" below reflects the actual implemented
+data-access pattern, not a pending correction.
 
 ## The three surfaces, and why they're really one pipeline
 

@@ -17,6 +17,13 @@ const FETCH_HEADERS = {
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
 };
 
+// A hung third-party source (no timeout at all previously) would otherwise
+// stall the whole request -- vercel.json's maxDuration is 60s, so this
+// leaves real headroom for parsing/DB work after the fetch resolves either
+// way. The headless-browser fallback (browserFetch.ts) already has its own
+// 30s timeout on page.goto; this covers the far more common plain-fetch path.
+const FETCH_TIMEOUT_MS = 20_000;
+
 // Re-exported so existing callers (e.g. src/app/api/surf/route.ts) can
 // import it alongside fetchChapterContent without a second import line.
 export { HeadlessBrowserRequiredError };
@@ -43,7 +50,7 @@ interface FetchHtmlOptions {
 // didn't). A genuine non-challenge failure (404 etc.) still throws its own
 // descriptive error instead of silently trying a browser for no reason.
 async function fetchHtml(url: string, { allowHeadless = true }: FetchHtmlOptions = {}): Promise<string> {
-  const res = await fetch(url, { headers: FETCH_HEADERS });
+  const res = await fetch(url, { headers: FETCH_HEADERS, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
   const html = await res.text();
   if (looksLikeBotChallenge(res.status, html)) {
     if (!allowHeadless) {

@@ -23,6 +23,29 @@ export const dynamic = "force-dynamic";
 
 const DISCOVER_RATE_LIMIT = { windowMs: 10 * 60 * 1000, max: 30 };
 
+// Process-local, short-TTL cache for the fetched list HTML -- a book-list
+// page's content doesn't change meaningfully minute-to-minute, and for a
+// Cloudflare-protected source (currently only 69shuba.com) a signed-in
+// reader's fetch pays a real headless-browser launch every single time
+// without this. Only successful fetches are cached (a thrown
+// HeadlessBrowserRequiredError never reaches the `.set` below), so an
+// anonymous visitor hitting a still-uncached, challenged source still
+// gets that same clear error as before -- this only avoids *repeat*
+// Chromium launches for the same URL within the window, across every
+// reader, not a correctness change.
+const LIST_HTML_CACHE_TTL_MS = 5 * 60 * 1000;
+const listHtmlCache = new Map<string, { html: string; expiresAt: number }>();
+
+async function fetchListHtmlCached(url: string, allowHeadless: boolean): Promise<string> {
+  const now = Date.now();
+  const cached = listHtmlCache.get(url);
+  if (cached && cached.expiresAt > now) return cached.html;
+
+  const html = await fetchRawHtml(url, { allowHeadless });
+  listHtmlCache.set(url, { html, expiresAt: now + LIST_HTML_CACHE_TTL_MS });
+  return html;
+}
+
 function ErrorPage({ message }: { message: string }) {
   return (
     <main className="mx-auto flex max-w-4xl flex-1 flex-col gap-4 p-6">
@@ -71,7 +94,7 @@ export default async function DiscoverSourcePage({
 
   let books;
   try {
-    const html = await fetchRawHtml(listUrl, { allowHeadless: userId !== null });
+    const html = await fetchListHtmlCached(listUrl, userId !== null);
     books = adapter.getBookList(html, listUrl);
   } catch (err) {
     if (err instanceof HeadlessBrowserRequiredError) {

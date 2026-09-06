@@ -73,3 +73,27 @@ test("deduplicates repeated hrefs within the winning cluster", () => {
   const items = extractChapterList(html, "https://example.com/d/");
   assert.equal(items.length, 2);
 });
+
+// fanqienovel.com's real book-landing-page structure (confirmed by
+// inspecting a real page's DOM directly, not guessed): each chapter link
+// is a[href].chapter-item-title inside its own div.chapter-item, all
+// under one shared div.chapter container -- a real 351-chapter page was
+// found to already extract correctly via this generic pass (dense
+// same-ancestor cluster, chapter-labeled text), so this site gets no
+// getChapterList override in adapters.ts, only getChapterContent (title
+// resolution) and getBookMeta.
+test("handles fanqienovel.com's real chapter.chapter-item structure with no adapter needed", () => {
+  const html = `
+    <html><body>
+      <div class="chapter">
+        <div class="chapter-item"><a class="chapter-item-title" href="/reader/1">第1章 一</a></div>
+        <div class="chapter-item"><a class="chapter-item-title" href="/reader/2">第2章 二</a></div>
+        <div class="chapter-item"><a class="chapter-item-title" href="/reader/3">第3章 三</a></div>
+      </div>
+    </body></html>
+  `;
+  const items = extractChapterList(html, "https://fanqienovel.com/page/1");
+  assert.equal(items.length, 3);
+  assert.equal(items[0].title, "第1章 一");
+  assert.equal(items[0].url, "https://fanqienovel.com/reader/1");
+});

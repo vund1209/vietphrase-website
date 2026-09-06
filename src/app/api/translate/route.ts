@@ -14,12 +14,19 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ error: "content is required" }, { status: 400 });
   }
 
-  // Belt-and-suspenders alongside instrumentation.ts's register() hook --
-  // see src/lib/novels.ts's getOrTranslateChapter for why this exists.
-  await ensureDictionaryDb();
+  try {
+    // Belt-and-suspenders alongside instrumentation.ts's register() hook --
+    // see src/lib/novels.ts's getOrTranslateChapter for why this exists.
+    await ensureDictionaryDb();
 
-  // No novel context here -- global resolution only, per
-  // docs/VIETPHRASE_CORE.md "Per-novel name resolution".
-  const tokens = getTokenizer().tokenize(content);
-  return Response.json({ tokens } satisfies TranslateResponse);
+    // No novel context here -- global resolution only, per
+    // docs/VIETPHRASE_CORE.md "Per-novel name resolution".
+    const tokens = getTokenizer().tokenize(content);
+    return Response.json({ tokens } satisfies TranslateResponse);
+  } catch (err) {
+    return Response.json(
+      { error: err instanceof Error ? err.message : "Translation failed" },
+      { status: 500 }
+    );
+  }
 }

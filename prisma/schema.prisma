@@ -114,6 +114,17 @@ model Novel {
   tags                NovelTag[]
 
   @@index([addedByUserId])
+  // Real filter columns in src/lib/novelBrowse.ts's buildNovelWhere:
+  // sourceUrl (startsWith -- a B-tree index serves a prefix match) and
+  // completionStatus/author (equality). title/description deliberately
+  // NOT indexed here despite also being filter columns -- they're
+  // matched with `contains` (arbitrary substring), which a plain B-tree
+  // index can't accelerate at all (would need pg_trgm/GIN or full-text
+  // search instead); adding one would just be index-maintenance cost on
+  // every write for zero query benefit.
+  @@index([sourceUrl])
+  @@index([completionStatus])
+  @@index([author])
   @@map("novels")
 }
 
