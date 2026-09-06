@@ -3,16 +3,22 @@
 // before it ever reaches the tokenizer. See docs/VIETPHRASE_CORE.md
 // "scrape_blacklist". Loaded once per process; 274 rows, negligible
 // memory/time cost.
-import path from "node:path";
+//
+// Was previously hardcoded to LOCAL_DB_PATH directly (bypassing
+// src/lib/dictionaryDb.ts entirely) -- harmless in local dev, where the
+// real file is checked out there, but in production that path is never
+// populated at all (the file is downloaded to /tmp at runtime instead,
+// see dictionaryDb.ts), so this failed with "unable to open database
+// file" on every first-time chapter scrape regardless of whether the
+// tokenizer's own copy (a separate connection) was ready.
 import { DatabaseSync } from "node:sqlite";
-
-const DB_PATH = path.join(process.cwd(), "data", "seed", "dictionary_seed.db");
+import { resolveDbPath } from "./dictionaryDb.ts";
 
 let patterns: string[] | undefined;
 
 function loadPatterns(): string[] {
   if (!patterns) {
-    const db = new DatabaseSync(DB_PATH, { readOnly: true });
+    const db = new DatabaseSync(resolveDbPath(), { readOnly: true });
     const rows = db.prepare("SELECT pattern FROM scrape_blacklist").all() as {
       pattern: string;
     }[];
