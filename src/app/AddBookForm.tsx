@@ -42,17 +42,17 @@ export function AddBookForm() {
           placeholder="Dán URL trang mục lục truyện (ví dụ: https://.../book/123/)"
           value={url}
           onChange={(e) => setUrl(e.target.value)}
-          className="flex-1 rounded-md border border-neutral-300 px-3 py-2 dark:border-neutral-700 dark:bg-neutral-900"
+          className="flex-1 rounded-md border border-border bg-background px-3 py-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         />
         <button
           type="submit"
           disabled={loading || !url.trim()}
-          className="rounded-md bg-neutral-900 px-4 py-2 text-white disabled:opacity-40 dark:bg-white dark:text-neutral-900"
+          className="cursor-pointer rounded-md bg-secondary px-4 py-2 text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40 dark:text-neutral-900"
         >
           {loading ? "Đang thêm..." : "Thêm truyện"}
         </button>
       </div>
-      {error && <span className="text-sm text-red-600">{error}</span>}
+      {error && <span className="text-sm text-destructive">{error}</span>}
     </form>
   );
 }
