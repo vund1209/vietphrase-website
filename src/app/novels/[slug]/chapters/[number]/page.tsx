@@ -11,6 +11,7 @@ import {
 import { ChapterReader } from "@/components/ChapterReader";
 import { ReadingProgressPing } from "@/components/ReadingProgressPing";
 import { RefetchChapterButton } from "@/components/RefetchChapterButton";
+import { ChapterTocPanel } from "@/components/ChapterTocPanel";
 
 // Library/reader pages show live, per-request data (novels/chapters get
 // added and translated at runtime) -- never statically prerender these.
@@ -60,9 +61,12 @@ export default async function ChapterPage({
         <Link href={`/novels/${slug}`} className="hover:text-foreground hover:underline">
           ← {novel.title}
         </Link>
-        <span>
-          Chương {chapterNumber} / {totalChapters}
-        </span>
+        <div className="flex items-center gap-1">
+          <span>
+            Chương {chapterNumber} / {totalChapters}
+          </span>
+          <ChapterTocPanel novelSlug={slug} currentChapter={chapterNumber} chapters={novel.chapters} />
+        </div>
       </div>
 
       <div className="flex items-center justify-between gap-2">
