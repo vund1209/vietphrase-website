@@ -6,7 +6,7 @@
 // planning doc's section 8.
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, UploadSimple } from "@phosphor-icons/react";
+import { Link as LinkIcon, PencilSimple, Plus, UploadSimple } from "@phosphor-icons/react";
 import { DeleteNovelButton } from "./DeleteNovelButton";
 import { useToast } from "./ToastProvider";
 
@@ -24,6 +24,13 @@ export function OwnerNovelActions({ novelSlug, novelTitle }: OwnerNovelActionsPr
   const [saving, setSaving] = useState(false);
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [urlImportOpen, setUrlImportOpen] = useState(false);
+  const [importUrl, setImportUrl] = useState("");
+  const [urlError, setUrlError] = useState<string | null>(null);
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [newTitle, setNewTitle] = useState(novelTitle);
+  const [renaming, setRenaming] = useState(false);
+  const [renameError, setRenameError] = useState<string | null>(null);
 
   async function addChapter() {
     if (!title.trim() || !rawText.trim()) return;
@@ -66,6 +73,48 @@ export function OwnerNovelActions({ novelSlug, novelTitle }: OwnerNovelActionsPr
     router.refresh();
   }
 
+  async function importFromUrl() {
+    if (!importUrl.trim()) return;
+    setImporting(true);
+    setUrlError(null);
+    const res = await fetch(`/api/novels/${novelSlug}/chapters/import-url`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: importUrl.trim() }),
+    });
+    setImporting(false);
+    if (!res.ok) {
+      const body: { error?: string } | null = await res.json().catch(() => null);
+      setUrlError(body?.error ?? "Nhập từ URL thất bại.");
+      return;
+    }
+    const data: { added: number } = await res.json();
+    showToast(`Đã nhập ${data.added} chương.`);
+    setUrlImportOpen(false);
+    setImportUrl("");
+    router.refresh();
+  }
+
+  async function renameNovel() {
+    if (!newTitle.trim() || newTitle.trim() === novelTitle) return;
+    setRenaming(true);
+    setRenameError(null);
+    const res = await fetch(`/api/novels/${novelSlug}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: newTitle.trim() }),
+    });
+    setRenaming(false);
+    if (!res.ok) {
+      const body: { error?: string } | null = await res.json().catch(() => null);
+      setRenameError(body?.error ?? "Không thể đổi tên.");
+      return;
+    }
+    showToast("Đã đổi tên truyện.");
+    setRenameOpen(false);
+    router.refresh();
+  }
+
   return (
     <div className="flex flex-wrap items-center gap-2">
       <button
@@ -90,6 +139,25 @@ export function OwnerNovelActions({ novelSlug, novelTitle }: OwnerNovelActionsPr
           }}
         />
       </label>
+      <button
+        type="button"
+        onClick={() => setUrlImportOpen(true)}
+        disabled={importing}
+        className="flex cursor-pointer items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        <LinkIcon size={16} /> Nhập từ URL
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          setNewTitle(novelTitle);
+          setRenameError(null);
+          setRenameOpen(true);
+        }}
+        className="flex cursor-pointer items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted"
+      >
+        <PencilSimple size={16} /> Đổi tên
+      </button>
       <DeleteNovelButton novelSlug={novelSlug} novelTitle={novelTitle} redirectTo="/" />
 
       {addOpen && (
@@ -130,6 +198,82 @@ export function OwnerNovelActions({ novelSlug, novelTitle }: OwnerNovelActionsPr
                 className="cursor-pointer rounded-md bg-secondary px-3 py-2 text-sm text-white disabled:cursor-not-allowed disabled:opacity-50 dark:text-neutral-900"
               >
                 {saving ? "Đang lưu…" : "Thêm"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {urlImportOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setUrlImportOpen(false);
+          }}
+        >
+          <div className="flex w-full max-w-lg flex-col gap-3 rounded-lg border border-border bg-card p-5 shadow-xl">
+            <h2 className="font-display text-lg font-semibold">Nhập chương từ URL</h2>
+            <input
+              type="url"
+              value={importUrl}
+              onChange={(e) => setImportUrl(e.target.value)}
+              placeholder="https://mega.nz/file/..."
+              className="rounded-md border border-border bg-background px-3 py-2 text-sm"
+            />
+            <p className="text-xs text-muted-foreground">Hỗ trợ: mega.nz</p>
+            {urlError && <p className="text-sm text-destructive">{urlError}</p>}
+            <div className="flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setUrlImportOpen(false)}
+                className="cursor-pointer rounded-md border border-border px-3 py-2 text-sm hover:bg-muted"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={importFromUrl}
+                disabled={importing || !importUrl.trim()}
+                className="cursor-pointer rounded-md bg-secondary px-3 py-2 text-sm text-white disabled:cursor-not-allowed disabled:opacity-50 dark:text-neutral-900"
+              >
+                {importing ? "Đang nhập…" : "Nhập"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {renameOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setRenameOpen(false);
+          }}
+        >
+          <div className="flex w-full max-w-lg flex-col gap-3 rounded-lg border border-border bg-card p-5 shadow-xl">
+            <h2 className="font-display text-lg font-semibold">Đổi tên truyện</h2>
+            <input
+              value={newTitle}
+              onChange={(e) => setNewTitle(e.target.value)}
+              placeholder="Tên truyện"
+              className="rounded-md border border-border bg-background px-3 py-2 text-sm"
+            />
+            {renameError && <p className="text-sm text-destructive">{renameError}</p>}
+            <div className="flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setRenameOpen(false)}
+                className="cursor-pointer rounded-md border border-border px-3 py-2 text-sm hover:bg-muted"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={renameNovel}
+                disabled={renaming || !newTitle.trim() || newTitle.trim() === novelTitle}
+                className="cursor-pointer rounded-md bg-secondary px-3 py-2 text-sm text-white disabled:cursor-not-allowed disabled:opacity-50 dark:text-neutral-900"
+              >
+                {renaming ? "Đang lưu…" : "Lưu"}
               </button>
             </div>
           </div>
