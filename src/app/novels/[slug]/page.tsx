@@ -95,7 +95,16 @@ export default async function NovelPage({
             {novel.sourceUrl && (
               <>
                 <dt className="shrink-0">Nguồn</dt>
-                <dd className="break-all">{novel.sourceUrl}</dd>
+                <dd className="break-all">
+                  <a
+                    href={novel.sourceUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline hover:text-foreground"
+                  >
+                    {novel.sourceUrl}
+                  </a>
+                </dd>
               </>
             )}
             <dt className="shrink-0">Xuất hiện lần đầu</dt>

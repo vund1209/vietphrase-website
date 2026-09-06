@@ -64,26 +64,18 @@ body {
 /* Chapter body text -- shared by the interactive ChapterReader and the
    static cached-text fallback, so signed-in and anonymous readers get
    the same reading experience. Narrower column + serif face + generous
-   line-height + first-line paragraph indent reads more like a novel than
-   the app's default UI typography. */
+   line-height reads more like a novel than the app's default UI
+   typography.
+   Deliberately no first-line text-indent: this app's source scraping
+   splits dialogue-heavy chapters into mostly one-line "paragraphs" (see
+   src/lib/extract/chapterContent.ts), not real multi-line prose
+   paragraphs -- indenting every single line's first line (and leaving
+   any wrapped continuation flush-left) produced a ragged, inconsistent
+   left edge instead of the clean book-like effect indent is meant for.
+   Flush-left + the paragraph gap below is what actually reads clean here. */
 .prose-reading {
   max-width: 42rem;
   margin-inline: auto;
   font-family: var(--font-reading), Georgia, serif;
   line-height: 2;
-}
-
-.prose-reading p {
-  text-indent: 1.5em;
-}
-
-/* text-indent is inherited, and applies to the *first line* of any
-   descendant that establishes its own block/inline-block formatting
-   context -- not just the paragraph's own first line. ChapterReader.tsx
-   renders each word as its own `inline-block` span (for the per-word
-   click target), so without this reset, every single token silently
-   re-applied the 1.5em indent to itself, showing up as large, uneven
-   gaps between words instead of one indent at the paragraph's start. */
-.prose-reading p * {
-  text-indent: 0;
 }
