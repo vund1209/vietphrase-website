@@ -13,9 +13,10 @@ interface Props {
   novelSlug: string;
   chineseText: string;
   vietnameseText: string;
+  track: "phrase" | "name";
 }
 
-export function PromoteOverrideButton({ novelSlug, chineseText, vietnameseText }: Props) {
+export function PromoteOverrideButton({ novelSlug, chineseText, vietnameseText, track }: Props) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -27,7 +28,7 @@ export function PromoteOverrideButton({ novelSlug, chineseText, vietnameseText }
     const res = await fetch(`/api/novels/${novelSlug}/overrides/promote`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chineseText, vietnameseText }),
+      body: JSON.stringify({ chineseText, vietnameseText, track }),
     });
     setPending(false);
 

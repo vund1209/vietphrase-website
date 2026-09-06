@@ -7,6 +7,9 @@ ref/
 # locally via data/seed/build_dictionary.py, or downloaded automatically
 # at runtime from a GitHub Release asset — see src/lib/dictionaryDb.ts.
 data/seed/dictionary_seed.db
+# Gzip-compressed copy (~62 MB) uploaded alongside it as a second Release
+# asset -- same "don't commit it" reasoning, just also compressed.
+data/seed/dictionary_seed.db.gz
 
 # Python
 __pycache__/

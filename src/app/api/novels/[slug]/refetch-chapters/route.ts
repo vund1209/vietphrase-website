@@ -8,6 +8,8 @@ import { prisma } from "@/lib/prisma";
 import { fetchChapterList, extractSourceChapterId, selectNewChapters } from "@/lib/scraper";
 import { translateText } from "@/lib/tokenizer";
 import { ensureDictionaryDb } from "@/lib/dictionaryDb";
+import { stripDangerousMarkup } from "@/lib/sanitizeText";
+import { logActivity } from "@/lib/adminActivity";
 
 export async function POST(
   _request: Request,
@@ -49,7 +51,13 @@ export async function POST(
   // see src/lib/novels.ts's getOrTranslateChapter for why this exists.
   await ensureDictionaryDb();
 
-  const existingSourceUrls = new Set(novel.chapters.map((c) => c.sourceUrl));
+  // Filters out null sourceUrl -- can only happen for a manually-entered/
+  // imported USER_CREATED chapter, which this SCRAPED-only route never
+  // touches, but Chapter.sourceUrl is nullable in the schema now (see
+  // the planning doc's section 8) so the type allows it.
+  const existingSourceUrls = new Set(
+    novel.chapters.map((c) => c.sourceUrl).filter((url): url is string => url !== null)
+  );
   const newChapters = selectNewChapters(existingSourceUrls, fetched.chapters);
   if (newChapters.length === 0) {
     return Response.json({ added: 0 });
@@ -57,15 +65,26 @@ export async function POST(
 
   const nextNumber = novel.chapters.reduce((max, c) => Math.max(max, c.chapterNumber), 0) + 1;
   await prisma.chapter.createMany({
-    data: newChapters.map((c, i) => ({
-      novelId: novel.id,
-      chapterNumber: nextNumber + i,
-      title: translateText(c.title),
-      originalTitle: c.title,
-      sourceChapterId: extractSourceChapterId(c.url),
-      sourceUrl: c.url,
-      status: "PENDING",
-    })),
+    data: newChapters.map((c, i) => {
+      const title = stripDangerousMarkup(c.title);
+      return {
+        novelId: novel.id,
+        chapterNumber: nextNumber + i,
+        title: translateText(title),
+        originalTitle: title,
+        sourceChapterId: extractSourceChapterId(c.url),
+        sourceUrl: c.url,
+        status: "PENDING",
+      };
+    }),
+  });
+
+  await logActivity({
+    userId: Number(session.user.id),
+    action: "novel.refetch_chapters",
+    targetType: "novel",
+    targetId: slug,
+    metadata: { added: newChapters.length },
   });
 
   return Response.json({ added: newChapters.length });

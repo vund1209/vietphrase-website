@@ -9,9 +9,10 @@ import { useRouter } from "next/navigation";
 interface Props {
   id: number;
   isActive: boolean;
+  track: "phrase" | "name";
 }
 
-export function GlobalOverrideDeactivateButton({ id, isActive }: Props) {
+export function GlobalOverrideDeactivateButton({ id, isActive, track }: Props) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
 
@@ -20,7 +21,7 @@ export function GlobalOverrideDeactivateButton({ id, isActive }: Props) {
     await fetch(`/api/dictionary/global/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ isActive: !isActive }),
+      body: JSON.stringify({ isActive: !isActive, track }),
     });
     setPending(false);
     router.refresh();

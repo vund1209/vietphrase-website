@@ -79,3 +79,49 @@ test("merges chapters across every per-volume story-catalog container, in order"
   assert.equal(chapters[0].url, "https://book.sfacg.com/Novel/530508/1/1/");
   assert.equal(chapters[2].url, "https://book.sfacg.com/vip/c/999/");
 });
+
+// Fixture mirrors book.sfacg.com/List/'s real structure: each book is its
+// own <ul class="Comic_Pic_List"> (cover-image <li> + text <li>) inside a
+// single .comic_cover container -- confirmed by inspecting the live list
+// page's DOM directly (Discover mode, planning doc's section 14).
+test("getBookList extracts title/author/cover/url per book, scoped to .comic_cover", () => {
+  const html = `
+    <html><body>
+      <div class="comic_cover Blue_link3">
+        <ul class="Comic_Pic_List">
+          <li class="Conjunction"><a href="/Novel/100001/" target="_blank">
+            <img src="http://rs.sfacg.com/cover/one.jpg" width="80" height="100"></a></li>
+          <li><strong><a href="/Novel/100001/" target="_blank">Truyện mẫu một</a></strong><br>
+            作 者： <a href="/Club/1/">Tác giả A</a><br>
+            综合信息： <span class="font_red">5.0分</span> / <a href="/List/?tid=21">魔幻</a> / 2026/1/1 / 1000字<br>
+            Đoạn giới thiệu mẫu.</li>
+        </ul>
+        <ul class="Comic_Pic_List">
+          <li class="Conjunction"><a href="/Novel/100002/" target="_blank"></a></li>
+          <li><strong><a href="/Novel/100002/" target="_blank">Truyện mẫu hai</a></strong><br>
+            作 者： <a href="/Club/2/">Tác giả B</a></li>
+        </ul>
+      </div>
+      <div class="recommend">
+        <ul class="Comic_Pic_List">
+          <li class="Conjunction"><a href="/Novel/999999/" target="_blank">
+            <img src="http://rs.sfacg.com/cover/decoy.jpg"></a></li>
+          <li><strong><a href="/Novel/999999/" target="_blank">Không nên xuất hiện</a></strong></li>
+        </ul>
+      </div>
+    </body></html>
+  `;
+  const adapter = resolveAdapter("https://book.sfacg.com/List/");
+  const books = adapter!.getBookList!(html, "https://book.sfacg.com/List/");
+
+  assert.equal(books.length, 2);
+  assert.deepEqual(books[0], {
+    title: "Truyện mẫu một",
+    author: "Tác giả A",
+    coverImageUrl: "http://rs.sfacg.com/cover/one.jpg",
+    url: "https://book.sfacg.com/Novel/100001/",
+  });
+  assert.equal(books[1].title, "Truyện mẫu hai");
+  assert.equal(books[1].coverImageUrl, null);
+  assert.ok(!books.some((b) => b.url.includes("999999")));
+});

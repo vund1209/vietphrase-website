@@ -11,6 +11,8 @@ import { fetchBookMeta } from "@/lib/scraper";
 import { translateText } from "@/lib/tokenizer";
 import { loadOverridesForNovel } from "@/lib/overrides";
 import { ensureDictionaryDb } from "@/lib/dictionaryDb";
+import { stripDangerousMarkup } from "@/lib/sanitizeText";
+import { logActivity } from "@/lib/adminActivity";
 
 export async function POST(
   _request: Request,
@@ -51,16 +53,26 @@ export async function POST(
   // translated against only the base dictionary forever.
   const { translations, capStyles } = await loadOverridesForNovel(novel.id);
 
+  const originalTitle = meta.title ? stripDangerousMarkup(meta.title) : undefined;
+  const originalDescription = meta.description ? stripDangerousMarkup(meta.description) : null;
+
   const updated = await prisma.novel.update({
     where: { id: novel.id },
     data: {
-      title: meta.title ? translateText(meta.title, translations, capStyles) : undefined,
-      originalTitle: meta.title ?? undefined,
-      description: meta.description ? translateText(meta.description, translations, capStyles) : null,
-      originalDescription: meta.description ?? null,
+      title: originalTitle ? translateText(originalTitle, translations, capStyles) : undefined,
+      originalTitle,
+      description: originalDescription ? translateText(originalDescription, translations, capStyles) : null,
+      originalDescription,
       author: meta.author ?? undefined,
       coverImageUrl: meta.coverImageUrl ?? undefined,
     },
+  });
+
+  await logActivity({
+    userId: Number(session.user.id),
+    action: "novel.refetch_metadata",
+    targetType: "novel",
+    targetId: updated.slug,
   });
 
   return Response.json({ novel: updated });

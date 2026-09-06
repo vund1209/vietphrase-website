@@ -7,13 +7,33 @@ import { extractChapterList } from "./extract/chapterList.ts";
 import { extractChapterContent } from "./extract/chapterContent.ts";
 import { resolveAdapter } from "./extract/adapters.ts";
 import { filterBlacklist } from "./blacklist.ts";
+import { stripDangerousMarkup } from "./sanitizeText.ts";
 import { looksLikeBotChallenge } from "./botChallenge.ts";
+import { HeadlessBrowserRequiredError } from "./fetchErrors.ts";
 import type { ChapterListItem } from "./extract/types";
 
 const FETCH_HEADERS = {
   "User-Agent":
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
 };
+
+// Re-exported so existing callers (e.g. src/app/api/surf/route.ts) can
+// import it alongside fetchChapterContent without a second import line.
+export { HeadlessBrowserRequiredError };
+
+interface FetchHtmlOptions {
+  /**
+   * Whether a bot-challenged fetch may escalate to a real headless
+   * browser launch. Defaults to true (every existing embedded-book flow:
+   * add-by-URL, lazy chapter scrape, admin re-fetch). Callers that accept
+   * an arbitrary, reader-submitted URL at request time (currently
+   * /api/surf) pass `false` for an anonymous request instead -- see the
+   * planning doc's section 5: an anonymous visitor hitting a bot-challenged
+   * page gets a clear error instead of silently paying for a Chromium
+   * launch on every request.
+   */
+  allowHeadless?: boolean;
+}
 
 // Falls back to a real headless browser (see src/lib/browserFetch.ts) when
 // the plain fetch looks like a bot challenge -- e.g. book.sfacg.com works
@@ -22,10 +42,15 @@ const FETCH_HEADERS = {
 // mode already had this fallback; the add-a-book/re-scrape pipeline
 // didn't). A genuine non-challenge failure (404 etc.) still throws its own
 // descriptive error instead of silently trying a browser for no reason.
-async function fetchHtml(url: string): Promise<string> {
+async function fetchHtml(url: string, { allowHeadless = true }: FetchHtmlOptions = {}): Promise<string> {
   const res = await fetch(url, { headers: FETCH_HEADERS });
   const html = await res.text();
   if (looksLikeBotChallenge(res.status, html)) {
+    if (!allowHeadless) {
+      throw new HeadlessBrowserRequiredError(
+        "Trang này cần chế độ trình duyệt đầy đủ để tải -- cần đăng nhập để dùng chế độ này."
+      );
+    }
     // Dynamic import: browserFetch.ts pulls in playwright-core, a heavy
     // dependency that should only ever load for the rare request that's
     // actually bot-challenged -- keeping it out of this module's static
@@ -253,14 +278,17 @@ export interface FetchedChapterContent {
   rawText: string;
 }
 
-export async function fetchChapterContent(chapterUrl: string): Promise<FetchedChapterContent> {
-  const html = await fetchHtml(chapterUrl);
+export async function fetchChapterContent(
+  chapterUrl: string,
+  options?: FetchHtmlOptions
+): Promise<FetchedChapterContent> {
+  const html = await fetchHtml(chapterUrl, options);
   const adapter = resolveAdapter(chapterUrl);
   const extracted = adapter
     ? adapter.getChapterContent(html, chapterUrl)
     : extractChapterContent(html);
 
-  const rawText = filterBlacklist(extracted.text);
+  const rawText = filterBlacklist(stripDangerousMarkup(extracted.text));
   if (!rawText.trim()) {
     throw new Error(
       "Could not extract chapter content from this page. The generic " +

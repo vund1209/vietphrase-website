@@ -5,6 +5,7 @@
 // (src/lib/novels.ts) already does the right thing once rawText is null.
 import { auth, isAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { logActivity } from "@/lib/adminActivity";
 
 export async function POST(
   _request: Request,
@@ -39,6 +40,13 @@ export async function POST(
   await prisma.chapter.update({
     where: { id: chapter.id },
     data: { rawText: null, status: "PENDING", scrapedAt: null },
+  });
+
+  await logActivity({
+    userId: Number(session.user.id),
+    action: "chapter.refetch",
+    targetType: "chapter",
+    targetId: `${slug}#${chapterNumber}`,
   });
 
   return Response.json({ ok: true });

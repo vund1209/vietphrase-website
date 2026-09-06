@@ -15,6 +15,14 @@ export interface NovelBrowseQuery {
   q: string;
   source: string | null;
   status: NovelCompletionStatus | null;
+  // See the planning doc's section 6 -- clickable "Tác giả"/"Thêm bởi"
+  // attribution on the novel page both land here.
+  author: string | null;
+  addedBy: number | null;
+  // Preset Tag slugs (see prisma/schema.prisma's Tag model and the
+  // planning doc's section 13) -- matches ANY selected tag (OR), not all
+  // of them, per that section's decision.
+  tags: string[];
   sort: NovelSort;
   page: number;
 }
@@ -26,6 +34,9 @@ export function parseNovelBrowseQuery(searchParams: {
   q?: string;
   source?: string;
   status?: string;
+  author?: string;
+  addedBy?: string;
+  tags?: string;
   sort?: string;
   page?: string;
 }): NovelBrowseQuery {
@@ -36,17 +47,25 @@ export function parseNovelBrowseQuery(searchParams: {
     ? (searchParams.status as NovelCompletionStatus)
     : null;
   const page = Math.max(1, Number(searchParams.page) || 1);
+  const addedByRaw = Number(searchParams.addedBy);
+  const tags = (searchParams.tags ?? "")
+    .split(",")
+    .map((t) => t.trim())
+    .filter(Boolean);
 
   return {
     q: searchParams.q?.trim() ?? "",
     source: searchParams.source?.trim() || null,
     status,
+    author: searchParams.author?.trim() || null,
+    addedBy: Number.isInteger(addedByRaw) && addedByRaw > 0 ? addedByRaw : null,
+    tags,
     sort,
     page,
   };
 }
 
-export function buildNovelWhere({ q, source, status }: NovelBrowseQuery): Prisma.NovelWhereInput {
+export function buildNovelWhere({ q, source, status, author, addedBy, tags }: NovelBrowseQuery): Prisma.NovelWhereInput {
   const clauses: Prisma.NovelWhereInput[] = [];
 
   if (q) {
@@ -68,6 +87,15 @@ export function buildNovelWhere({ q, source, status }: NovelBrowseQuery): Prisma
   }
   if (status) {
     clauses.push({ completionStatus: status });
+  }
+  if (author) {
+    clauses.push({ author: { equals: author, mode: "insensitive" } });
+  }
+  if (addedBy) {
+    clauses.push({ addedByUserId: addedBy });
+  }
+  if (tags.length > 0) {
+    clauses.push({ tags: { some: { tag: { slug: { in: tags } } } } });
   }
 
   return clauses.length > 0 ? { AND: clauses } : {};

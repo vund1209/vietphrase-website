@@ -6,19 +6,33 @@
    unchanged -- only what *triggers* it changes. */
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* "Book & Reading Tracker" palette, from ui-ux-pro-max's --design-system
-   generator (query: "book reading library novel tracker") -- warm paper +
-   book-brown/page-amber, matched to this product after checking its first,
-   unscoped result (a news-site red palette) didn't fit. Dark values are
-   desaturated/lighter tonal variants in the same warm-stone family, not a
-   literal inversion. */
+/* Visual redesign v2 (see the planning doc's section 12): the original
+   "Book & Reading Tracker" palette (warm paper + book-brown/page-amber)
+   read as muted/classic rather than energetic -- the user's own words,
+   confirmed by comparing structurally against two reference sites. This
+   keeps the *architecture* identical (same token names, same light/dark
+   `.dark` class mechanism) and the reading canvas's warm-paper
+   background/card untouched (readability there is non-negotiable) --
+   only --secondary (the main CTA button color -- confirmed the most-used
+   token in the app, 15 call sites) and --accent (badges/highlights/
+   borders -- 19 call sites) repaint (--primary stays as-is since it
+   turned out to have zero actual call sites to affect).
+   First candidate was a punchier rose (#e11d48) + blue (#2563eb) pair --
+   user feedback: liked the rose/blue direction, asked for "a little
+   purple also (very calm romantic)" and a "light tempo" (softer/lighter
+   tint, not as punchy). This revision uses fuchsia (rose-purple) for
+   --secondary and indigo (blue-purple) for --accent -- purple bridges
+   both, and both are one step lighter/softer on the Tailwind scale than
+   the first pass (500-level instead of 600-level in light mode). Dark
+   values stay brighter/more saturated than their light counterparts,
+   same pattern the original palette already used. */
 :root {
   --background: #fffbeb;
   --foreground: #0f172a;
   --card: #ffffff;
   --primary: #78716c;
-  --secondary: #92400e;
-  --accent: #d97706;
+  --secondary: #d946ef;
+  --accent: #6366f1;
   --muted: #f6f6f6;
   --muted-foreground: #475569;
   --border: #eeeded;
@@ -30,8 +44,8 @@
   --foreground: #f5f5f4;
   --card: #292524;
   --primary: #a8a29e;
-  --secondary: #b45309;
-  --accent: #fbbf24;
+  --secondary: #e879f9;
+  --accent: #a5b4fc;
   --muted: #292524;
   --muted-foreground: #a8a29e;
   --border: #44403c;

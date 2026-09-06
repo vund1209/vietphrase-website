@@ -19,6 +19,15 @@ export interface BookMeta {
   coverImageUrl: string | null;
 }
 
+/** One entry in a source site's own browse/rankings list -- see getBookList below. */
+export interface DiscoverBookListItem {
+  title: string;
+  author: string | null;
+  coverImageUrl: string | null;
+  /** The book's own landing/detail page on the source site -- what an embed action passes to POST /api/novels. */
+  url: string;
+}
+
 /**
  * Per-site adapter interface, tried before the generic extractor. No
  * adapters exist yet -- add one here only once a real target site is
@@ -39,4 +48,11 @@ export interface SiteAdapter {
    * the generic extractor entirely.
    */
   getBookMeta?(html: string, pageUrl: string): BookMeta;
+  /**
+   * Optional: extracts a page of book-list entries from a source's own
+   * browse/rankings list page (not a chapter list) -- powers Discover mode
+   * (src/app/surf/discover). Absent = this source isn't offered there, even
+   * if it has chapter-list/content adapters for the embed pipeline.
+   */
+  getBookList?(html: string, pageUrl: string): DiscoverBookListItem[];
 }

@@ -6,7 +6,8 @@
 // prefers-reduced-motion is set, rather than skipping the animation props
 // individually.
 import { Children, isValidElement } from "react";
-import { motion, useReducedMotion, type Variants } from "framer-motion";
+import { m, useReducedMotion, type Variants } from "framer-motion";
+import { STANDARD_TRANSITION } from "@/lib/motion";
 
 const GRID_CLASSNAME = "grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4";
 
@@ -17,7 +18,7 @@ const container: Variants = {
 
 const item: Variants = {
   hidden: { opacity: 0, y: 12 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.3, ease: "easeOut" } },
+  show: { opacity: 1, y: 0, transition: STANDARD_TRANSITION },
 };
 
 export function NovelGrid({ children }: { children: React.ReactNode }) {
@@ -28,12 +29,12 @@ export function NovelGrid({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <motion.div className={GRID_CLASSNAME} variants={container} initial="hidden" animate="show">
+    <m.div className={GRID_CLASSNAME} variants={container} initial="hidden" animate="show">
       {Children.toArray(children).map((child, i) => (
-        <motion.div key={isValidElement(child) ? (child.key ?? i) : i} variants={item}>
+        <m.div key={isValidElement(child) ? (child.key ?? i) : i} variants={item}>
           {child}
-        </motion.div>
+        </m.div>
       ))}
-    </motion.div>
+    </m.div>
   );
 }

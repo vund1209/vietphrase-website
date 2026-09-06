@@ -1,14 +1,18 @@
 // Editor-only: promote a chineseText/vietnameseText pair into the
-// novel's shared Name dictionary (see docs/ARCHITECTURE.md "User
-// management and per-word overrides"). Takes the pair directly rather
-// than a specific UserWordOverride id, so an editor can review any
-// reader's suggestion (or type their own correction) and promote
-// whichever value they judge best -- not necessarily their own.
+// novel's shared dictionary (see docs/ARCHITECTURE.md "User management
+// and per-word overrides"). Takes the pair directly rather than a
+// specific UserWordOverride/UserNameOverride id, so an editor can review
+// any reader's suggestion (or type their own correction) and promote
+// whichever value they judge best -- not necessarily their own. `track`
+// picks which shared table this writes to -- "phrase" (NovelWordOverride)
+// or "name" (Name), see src/lib/overrides.ts's file header.
 import { auth, isEditorOrAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { translateText } from "@/lib/tokenizer";
-import { loadOverridesForNovel, validateOverridePair, validateCapStyle } from "@/lib/overrides";
+import { loadOverridesForNovel, validateOverridePair, validateCapStyle, validateTrack, type OverrideTrack } from "@/lib/overrides";
+import { bumpDictionaryVersion } from "@/lib/dictionaryVersion";
 import { ensureDictionaryDb } from "@/lib/dictionaryDb";
+import { logActivity } from "@/lib/adminActivity";
 
 export async function POST(
   request: Request,
@@ -44,30 +48,48 @@ export async function POST(
   if (!validateCapStyle(capStyle)) {
     return Response.json({ error: "Invalid capStyle" }, { status: 400 });
   }
+  const track: OverrideTrack = validateTrack(body?.track) ? body.track : "phrase";
 
   // Belt-and-suspenders alongside instrumentation.ts's register() hook --
   // see src/lib/novels.ts's getOrTranslateChapter for why this exists.
   await ensureDictionaryDb();
 
   const editorId = Number(session.user.id);
-  const name = await prisma.name.upsert({
-    where: { chineseText_novelId: { chineseText, novelId: novel.id } },
-    create: {
-      chineseText,
-      vietnameseText,
-      capStyle,
-      novelId: novel.id,
-      phraseLength: chineseText.length,
-      source: "user_promoted",
-      promotedByUserId: editorId,
-    },
-    update: {
-      vietnameseText,
-      capStyle,
-      isActive: true,
-      promotedByUserId: editorId,
-    },
-  });
+  const phraseLength = chineseText.length;
+  const promoted =
+    track === "name"
+      ? await prisma.name.upsert({
+          where: { chineseText_novelId: { chineseText, novelId: novel.id } },
+          create: {
+            chineseText,
+            vietnameseText,
+            capStyle,
+            novelId: novel.id,
+            phraseLength,
+            source: "user_promoted",
+            promotedByUserId: editorId,
+          },
+          update: { vietnameseText, capStyle, isActive: true, promotedByUserId: editorId },
+        })
+      : await prisma.novelWordOverride.upsert({
+          where: { chineseText_novelId: { chineseText, novelId: novel.id } },
+          create: {
+            chineseText,
+            vietnameseText,
+            capStyle,
+            novelId: novel.id,
+            phraseLength,
+            source: "user_promoted",
+            promotedByUserId: editorId,
+          },
+          update: { vietnameseText, capStyle, isActive: true, promotedByUserId: editorId },
+        });
+
+  // Invalidates every reader's cached shared-override layer (see
+  // src/lib/overrides.ts's loadOverridesForNovelCached) -- must happen
+  // before the freshOverrides re-fetch just below so that read is
+  // guaranteed to see this write.
+  await bumpDictionaryVersion();
 
   // Titles are short strings -- cheap to redo synchronously here too, so
   // they stay in sync with the dictionary rather than going stale until
@@ -112,5 +134,13 @@ export async function POST(
     )
   );
 
-  return Response.json({ name });
+  await logActivity({
+    userId: editorId,
+    action: "override.promote",
+    targetType: "novel",
+    targetId: slug,
+    metadata: { chineseText, vietnameseText, track },
+  });
+
+  return Response.json({ entry: { ...promoted, track } });
 }

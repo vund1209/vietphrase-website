@@ -17,6 +17,7 @@ import fs from "node:fs";
 import fsp from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import zlib from "node:zlib";
 import { pipeline } from "node:stream/promises";
 import { Readable, Transform } from "node:stream";
 import type { ReadableStream as NodeWebReadableStream } from "node:stream/web";
@@ -133,13 +134,23 @@ async function downloadDictionaryDb(): Promise<void> {
   // whole in memory), via a temp path + rename so a failed/interrupted
   // download never leaves a partial file sitting at CACHED_DB_PATH for a
   // later cold start to mistake for valid.
+  //
+  // Transparent gzip support: if DICTIONARY_DB_URL points at a `.gz`
+  // asset, decompress it as part of this same streaming pipeline (a
+  // SQLite file with this much repeated string data compresses well --
+  // see the performance plan's Phase 1). Purely additive: an existing
+  // uncompressed URL (no `.gz` suffix) keeps working exactly as before,
+  // no env-var migration forced by this change.
+  const isGzipped = url.endsWith(".gz");
   const downloadPath = `${CACHED_DB_PATH}.download`;
   try {
-    await pipeline(
+    const streams = [
       Readable.fromWeb(res.body as NodeWebReadableStream<Uint8Array>),
       progressTransform,
-      fs.createWriteStream(downloadPath)
-    );
+      ...(isGzipped ? [zlib.createGunzip()] : []),
+      fs.createWriteStream(downloadPath),
+    ];
+    await pipeline(streams);
     await fsp.rename(downloadPath, CACHED_DB_PATH);
     status = { state: "ready" };
   } catch (err) {

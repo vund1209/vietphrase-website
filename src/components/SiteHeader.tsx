@@ -8,7 +8,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { useSession } from "next-auth/react";
-import { BookOpen, BookBookmark, List, MagnifyingGlass, Translate, X } from "@phosphor-icons/react";
+import { BookOpen, BookBookmark, ClipboardText, List, MagnifyingGlass, Translate, X } from "@phosphor-icons/react";
 import { AuthNav } from "./AuthNav";
 import { ThemeToggle } from "./ThemeToggle";
 import { DictionaryStatusDot } from "./DictionaryStatusDot";
@@ -22,13 +22,16 @@ const NAV_ITEMS = [
 // Admin-only: previously had no nav entry at all, so an admin who just
 // applied a global dictionary correction (SpanEditor's "Áp dụng cho tất cả
 // truyện") had no way to find /admin/dictionary to review/manage it.
-const ADMIN_NAV_ITEM = { href: "/admin/dictionary", label: "Từ điển chung", icon: BookBookmark };
+const ADMIN_NAV_ITEMS = [
+  { href: "/admin/dictionary", label: "Từ điển chung", icon: BookBookmark },
+  { href: "/admin/activity", label: "Nhật ký", icon: ClipboardText },
+];
 
 export function SiteHeader() {
   const pathname = usePathname();
   const { data: session } = useSession();
   const isAdmin = session?.user?.role === "ADMIN";
-  const navItems = isAdmin ? [...NAV_ITEMS, ADMIN_NAV_ITEM] : NAV_ITEMS;
+  const navItems = isAdmin ? [...NAV_ITEMS, ...ADMIN_NAV_ITEMS] : NAV_ITEMS;
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (

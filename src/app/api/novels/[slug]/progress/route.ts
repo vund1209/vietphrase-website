@@ -1,13 +1,20 @@
-// Saves a reader's "continue reading" position for a novel. No auth --
-// see prisma/schema.prisma's ReadingProgress model for why this is
-// cookie-scoped rather than tied to a User account.
+// Saves a signed-in reader's "continue reading" position for a novel.
+// Auth required -- an anonymous reader's progress lives entirely
+// client-side (IndexedDB, see src/lib/clientSync.ts) and never reaches
+// this route at all; see ReadingProgressPing.tsx and prisma/schema.prisma's
+// ReadingProgress model for why it's userId-scoped now.
+import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getOrCreateReaderId } from "@/lib/readerId";
 
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ slug: string }> }
 ): Promise<Response> {
+  const session = await auth();
+  if (!session?.user) {
+    return Response.json({ error: "Sign in required" }, { status: 401 });
+  }
+
   const { slug } = await params;
   const novel = await prisma.novel.findUnique({ where: { slug }, select: { id: true } });
   if (!novel) {
@@ -20,10 +27,10 @@ export async function POST(
     return Response.json({ error: "chapterNumber must be a positive integer" }, { status: 400 });
   }
 
-  const readerId = await getOrCreateReaderId();
+  const userId = Number(session.user.id);
   await prisma.readingProgress.upsert({
-    where: { readerId_novelId: { readerId, novelId: novel.id } },
-    create: { readerId, novelId: novel.id, chapterNumber },
+    where: { userId_novelId: { userId, novelId: novel.id } },
+    create: { userId, novelId: novel.id, chapterNumber },
     update: { chapterNumber },
   });
 

@@ -11,8 +11,10 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, m } from "framer-motion";
 import { ListBullets, X } from "@phosphor-icons/react";
+import { useFocusTrap } from "@/lib/useFocusTrap";
+import { FADE_TRANSITION, STANDARD_TRANSITION } from "@/lib/motion";
 
 interface ChapterListItem {
   chapterNumber: number;
@@ -31,6 +33,19 @@ export function ChapterTocPanel({ novelSlug, currentChapter, chapters }: Props) 
   const [open, setOpen] = useState(false);
   const [jumpTo, setJumpTo] = useState("");
   const activeRef = useRef<HTMLAnchorElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(panelRef, open);
+  // createPortal's target (document.body) only exists client-side --
+  // evaluating it during the server render throws "document is not
+  // defined". Delay the portal until after mount, same pattern as
+  // ThemeToggle's isDark/null-until-mounted split.
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    // Same hydration-safe client-only pattern as ThemeToggle's isDark split.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -65,27 +80,33 @@ export function ChapterTocPanel({ novelSlug, currentChapter, chapters }: Props) 
       >
         <ListBullets size={16} /> Mục lục
       </button>
-      {createPortal(
+      {mounted && createPortal(
         <AnimatePresence>
           {open && (
             <>
-              <motion.div
+              <m.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                transition={{ duration: 0.15 }}
+                transition={FADE_TRANSITION}
                 className="fixed inset-0 z-50 bg-black/50"
                 onClick={() => setOpen(false)}
               />
-              <motion.div
+              <m.div
+                ref={panelRef}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="chapter-toc-title"
                 initial={{ x: "100%" }}
                 animate={{ x: 0 }}
                 exit={{ x: "100%" }}
-                transition={{ duration: 0.25, ease: "easeOut" }}
+                transition={STANDARD_TRANSITION}
                 className="fixed inset-y-0 right-0 z-50 flex w-full max-w-sm flex-col border-l border-border bg-card shadow-xl"
               >
                 <div className="flex items-center justify-between gap-2 border-b border-border p-4">
-                  <h2 className="font-display text-lg font-semibold">Mục lục</h2>
+                  <h2 id="chapter-toc-title" className="font-display text-lg font-semibold">
+                    Mục lục
+                  </h2>
                   <button
                     type="button"
                     onClick={() => setOpen(false)}
@@ -127,8 +148,10 @@ export function ChapterTocPanel({ novelSlug, currentChapter, chapters }: Props) 
                         ref={isActive ? activeRef : undefined}
                         href={`/novels/${novelSlug}/chapters/${chapter.chapterNumber}`}
                         onClick={() => setOpen(false)}
-                        className={`block rounded-md px-3 py-2 text-sm transition-colors ${
-                          isActive ? "bg-accent/20 font-medium" : "hover:bg-muted"
+                        className={`block rounded-md border-l-2 px-3 py-2 text-sm transition-colors ${
+                          isActive
+                            ? "border-l-accent bg-accent/20 font-medium text-accent"
+                            : "border-l-transparent hover:bg-muted"
                         }`}
                       >
                         Chương {chapter.chapterNumber}: {chapter.title}
@@ -136,7 +159,7 @@ export function ChapterTocPanel({ novelSlug, currentChapter, chapters }: Props) 
                     );
                   })}
                 </div>
-              </motion.div>
+              </m.div>
             </>
           )}
         </AnimatePresence>,

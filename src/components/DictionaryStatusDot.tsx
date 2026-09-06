@@ -9,7 +9,18 @@
 import { useEffect, useState } from "react";
 import type { DictionaryStatus } from "@/lib/dictionaryDb";
 
-const POLL_MS = 2000;
+const BASE_POLL_MS = 2000;
+const MAX_POLL_MS = 30_000;
+// See the planning doc's section 9 -- a flat 2s-forever poll was one of
+// two "clearly wrong as shipped" regressions called out regardless of
+// measurement. Caps total polling to a bounded window instead of
+// continuing indefinitely on a stuck/very slow cold start, and backs off
+// exponentially rather than hammering the endpoint every 2s the whole
+// time.
+const MAX_TOTAL_POLL_MS = 10 * 60 * 1000; // 10 minutes
+// Errors get a stricter cap -- a transient blip is worth a couple of
+// quick retries, but a persistent failure shouldn't poll forever.
+const MAX_ERROR_ATTEMPTS = 3;
 
 function formatMB(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(0)}MB`;
@@ -40,6 +51,16 @@ export function DictionaryStatusDot() {
   useEffect(() => {
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout>;
+    const startedAt = Date.now();
+    let attempt = 0;
+    let errorAttempts = 0;
+
+    function scheduleNext() {
+      attempt++;
+      const delay = Math.min(BASE_POLL_MS * 2 ** attempt, MAX_POLL_MS);
+      if (Date.now() - startedAt + delay > MAX_TOTAL_POLL_MS) return; // give up -- stuck too long
+      timer = setTimeout(poll, delay);
+    }
 
     async function poll() {
       try {
@@ -47,11 +68,17 @@ export function DictionaryStatusDot() {
         const data: DictionaryStatus = await res.json();
         if (cancelled) return;
         setStatus(data);
-        if (data.state !== "ready") {
-          timer = setTimeout(poll, POLL_MS);
+        if (data.state === "ready") return; // done polling
+        if (data.state === "error") {
+          errorAttempts++;
+          if (errorAttempts >= MAX_ERROR_ATTEMPTS) return; // stop retrying a persistent failure
         }
+        scheduleNext();
       } catch {
-        if (!cancelled) timer = setTimeout(poll, POLL_MS);
+        if (cancelled) return;
+        errorAttempts++;
+        if (errorAttempts >= MAX_ERROR_ATTEMPTS) return;
+        scheduleNext();
       }
     }
     poll();

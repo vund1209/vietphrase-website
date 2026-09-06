@@ -3,9 +3,10 @@ import { auth, isAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { GlobalOverrideDeactivateButton } from "@/components/GlobalOverrideDeactivateButton";
 
-// Admin-only: browse/search/deactivate GlobalWordOverride entries (see
-// prisma/schema.prisma and docs/PLANNED_FEATURES.md). Live app state --
-// never statically prerender.
+// Admin-only: browse/search/deactivate GlobalWordOverride (phrase track)
+// and GlobalNameOverride (name track) entries -- see prisma/schema.prisma
+// and docs/PLANNED_FEATURES.md. Live app state -- never statically
+// prerender.
 export const dynamic = "force-dynamic";
 
 const CAP_STYLE_LABEL: Record<string, string> = {
@@ -13,6 +14,37 @@ const CAP_STYLE_LABEL: Record<string, string> = {
   FIRST_LETTER: "Hoa chữ đầu",
   ALL_WORDS: "Hoa toàn bộ",
 };
+
+interface Entry {
+  id: number;
+  chineseText: string;
+  vietnameseText: string;
+  capStyle: string;
+  isActive: boolean;
+}
+
+function EntryList({ entries, track }: { entries: Entry[]; track: "phrase" | "name" }) {
+  if (entries.length === 0) {
+    return <p className="text-sm text-neutral-400">Chưa có mục nào.</p>;
+  }
+  return (
+    <ul className="flex flex-col divide-y divide-neutral-200 dark:divide-neutral-800">
+      {entries.map((entry) => (
+        <li key={entry.id} className="flex items-center justify-between gap-4 py-3">
+          <span className={entry.isActive ? "" : "text-neutral-400 line-through"}>
+            <span className="font-medium">{entry.chineseText}</span>
+            <span className="mx-2 text-neutral-400">→</span>
+            <span>{entry.vietnameseText}</span>
+            <span className="ml-2 text-xs text-neutral-400">
+              ({CAP_STYLE_LABEL[entry.capStyle] ?? entry.capStyle})
+            </span>
+          </span>
+          <GlobalOverrideDeactivateButton id={entry.id} isActive={entry.isActive} track={track} />
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 export default async function AdminDictionaryPage({
   searchParams,
@@ -29,20 +61,23 @@ export default async function AdminDictionaryPage({
 
   const { q } = await searchParams;
   const query = q?.trim() ?? "";
-  const entries = await prisma.globalWordOverride.findMany({
-    where: query ? { chineseText: { contains: query } } : {},
-    orderBy: { updatedAt: "desc" },
-    take: 200,
-  });
+  const where = query ? { chineseText: { contains: query } } : {};
+  const [wordEntries, nameEntries] = await Promise.all([
+    prisma.globalWordOverride.findMany({ where, orderBy: { updatedAt: "desc" }, take: 200 }),
+    prisma.globalNameOverride.findMany({ where, orderBy: { updatedAt: "desc" }, take: 200 }),
+  ]);
 
   return (
-    <main className="mx-auto flex max-w-3xl flex-1 flex-col gap-4 p-6">
-      <h1 className="text-xl font-semibold">Từ điển chung (áp dụng cho mọi truyện)</h1>
-      <p className="text-sm text-neutral-500">
-        Các mục này được kiểm tra trước từ điển gốc nhưng sau từ đã sửa riêng của từng truyện --
-        xem <code className="rounded bg-neutral-100 px-1 dark:bg-neutral-800">src/lib/overrides.ts</code>.
-        Thêm mục mới bằng nút &quot;Áp dụng cho tất cả truyện&quot; khi sửa một từ trong lúc đọc.
-      </p>
+    <main className="mx-auto flex max-w-3xl flex-1 flex-col gap-6 p-6">
+      <div>
+        <h1 className="text-xl font-semibold">Từ điển chung (áp dụng cho mọi truyện)</h1>
+        <p className="text-sm text-neutral-500">
+          Các mục này được kiểm tra trước từ điển gốc nhưng sau từ đã sửa riêng của từng truyện --
+          xem <code className="rounded bg-neutral-100 px-1 dark:bg-neutral-800">src/lib/overrides.ts</code>.
+          Cụm từ và tên riêng là hai từ điển tách biệt -- thêm mục mới bằng nút &quot;Áp dụng cho tất
+          cả truyện&quot; ở hàng tương ứng khi sửa một từ trong lúc đọc.
+        </p>
+      </div>
 
       <form method="GET" action="/admin/dictionary" className="flex gap-2">
         <input
@@ -60,25 +95,19 @@ export default async function AdminDictionaryPage({
         </button>
       </form>
 
-      {entries.length === 0 ? (
-        <p className="text-sm text-neutral-400">Chưa có mục nào.</p>
-      ) : (
-        <ul className="flex flex-col divide-y divide-neutral-200 dark:divide-neutral-800">
-          {entries.map((entry) => (
-            <li key={entry.id} className="flex items-center justify-between gap-4 py-3">
-              <span className={entry.isActive ? "" : "text-neutral-400 line-through"}>
-                <span className="font-medium">{entry.chineseText}</span>
-                <span className="mx-2 text-neutral-400">→</span>
-                <span>{entry.vietnameseText}</span>
-                <span className="ml-2 text-xs text-neutral-400">
-                  ({CAP_STYLE_LABEL[entry.capStyle] ?? entry.capStyle})
-                </span>
-              </span>
-              <GlobalOverrideDeactivateButton id={entry.id} isActive={entry.isActive} />
-            </li>
-          ))}
-        </ul>
-      )}
+      <section className="flex flex-col gap-2">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">
+          Cụm từ (Phrase)
+        </h2>
+        <EntryList entries={wordEntries} track="phrase" />
+      </section>
+
+      <section className="flex flex-col gap-2">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">
+          Tên riêng / Danh từ (Name)
+        </h2>
+        <EntryList entries={nameEntries} track="name" />
+      </section>
     </main>
   );
 }

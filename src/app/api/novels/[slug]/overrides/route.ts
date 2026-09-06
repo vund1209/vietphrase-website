@@ -1,11 +1,12 @@
-// A reader's private word overrides for one novel. See
+// A reader's private word/name overrides for one novel. See
 // docs/ARCHITECTURE.md "User management and per-word overrides": these
 // are visible only to the reader who saved them until an editor
-// promotes one into the novel's shared Name dictionary (see
-// ./promote/route.ts).
+// promotes one into the novel's shared dictionary (see ./promote/route.ts).
+// `track` picks which table this writes to -- "phrase" (UserWordOverride)
+// or "name" (UserNameOverride), see src/lib/overrides.ts's file header.
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { validateOverridePair, validateCapStyle } from "@/lib/overrides";
+import { validateOverridePair, validateCapStyle, validateTrack, type OverrideTrack } from "@/lib/overrides";
 
 async function resolveNovelId(slug: string): Promise<number | null> {
   const novel = await prisma.novel.findUnique({ where: { slug }, select: { id: true } });
@@ -27,13 +28,26 @@ export async function GET(
     return Response.json({ error: "Novel not found" }, { status: 404 });
   }
 
-  const overrides = await prisma.userWordOverride.findMany({
-    where: { novelId, userId: Number(session.user.id) },
-    orderBy: { updatedAt: "desc" },
-    select: { id: true, chineseText: true, vietnameseText: true, capStyle: true, updatedAt: true },
-  });
+  const userId = Number(session.user.id);
+  const [phraseOverrides, nameOverrides] = await Promise.all([
+    prisma.userWordOverride.findMany({
+      where: { novelId, userId },
+      orderBy: { updatedAt: "desc" },
+      select: { id: true, chineseText: true, vietnameseText: true, capStyle: true, updatedAt: true },
+    }),
+    prisma.userNameOverride.findMany({
+      where: { novelId, userId },
+      orderBy: { updatedAt: "desc" },
+      select: { id: true, chineseText: true, vietnameseText: true, capStyle: true, updatedAt: true },
+    }),
+  ]);
 
-  return Response.json({ overrides });
+  return Response.json({
+    overrides: [
+      ...phraseOverrides.map((o) => ({ ...o, track: "phrase" as const })),
+      ...nameOverrides.map((o) => ({ ...o, track: "name" as const })),
+    ],
+  });
 }
 
 export async function POST(
@@ -64,20 +78,23 @@ export async function POST(
   if (!validateCapStyle(capStyle)) {
     return Response.json({ error: "Invalid capStyle" }, { status: 400 });
   }
+  const track: OverrideTrack = validateTrack(body?.track) ? body.track : "phrase";
 
   const userId = Number(session.user.id);
-  const override = await prisma.userWordOverride.upsert({
-    where: { userId_novelId_chineseText: { userId, novelId, chineseText } },
-    create: {
-      userId,
-      novelId,
-      chineseText,
-      vietnameseText,
-      capStyle,
-      phraseLength: chineseText.length,
-    },
-    update: { vietnameseText, capStyle, phraseLength: chineseText.length },
-  });
+  const phraseLength = chineseText.length;
 
-  return Response.json({ override }, { status: 201 });
+  const override =
+    track === "name"
+      ? await prisma.userNameOverride.upsert({
+          where: { userId_novelId_chineseText: { userId, novelId, chineseText } },
+          create: { userId, novelId, chineseText, vietnameseText, capStyle, phraseLength },
+          update: { vietnameseText, capStyle, phraseLength },
+        })
+      : await prisma.userWordOverride.upsert({
+          where: { userId_novelId_chineseText: { userId, novelId, chineseText } },
+          create: { userId, novelId, chineseText, vietnameseText, capStyle, phraseLength },
+          update: { vietnameseText, capStyle, phraseLength },
+        });
+
+  return Response.json({ override: { ...override, track } }, { status: 201 });
 }

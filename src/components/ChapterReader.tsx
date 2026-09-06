@@ -11,14 +11,25 @@ import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence } from "framer-motion";
 import type { DisplayToken, CapStyle } from "@/lib/tokenizer";
 import { needsSpaceBetween } from "@/lib/tokenSpacing";
-import { SpanEditor, type ReuseEntry } from "./SpanEditor";
+import { SpanEditor, type ReuseEntry, type OverrideTrack } from "./SpanEditor";
+import { CandidateNamesPanel } from "./CandidateNamesPanel";
 import { useToast } from "./ToastProvider";
+import { loadLocalOverrideLayer, putPersonalOverride } from "@/lib/clientSync";
 
 interface ChapterReaderProps {
   novelSlug: string;
+  chapterNumber: number;
   lines: DisplayToken[][];
   canPromote: boolean;
   canApplyGlobally: boolean;
+  /**
+   * Whether this reader is signed in. A personal save always writes to
+   * IndexedDB (see src/lib/clientSync.ts); it also POSTs to Postgres only
+   * when signed in -- an anonymous save never creates a
+   * UserWordOverride/UserNameOverride row. See the planning doc's
+   * section 3 for why the personal tier moved entirely client-side.
+   */
+  isSignedIn: boolean;
 }
 
 interface SpanSelection {
@@ -49,11 +60,85 @@ function applyCapStyleClient(text: string, style: CapStyle): string {
   return text;
 }
 
+/**
+ * Rebuilds `line`, replacing any exact run of tokens whose concatenated
+ * `chinese` text equals `chineseText` with one token built by `build`
+ * from the matched underlying tokens (so hanViet/etc. can be
+ * reconstructed from them). No-op if `chineseText` doesn't appear.
+ */
+function mergeRunIntoLine(
+  line: DisplayToken[],
+  chineseText: string,
+  build: (matched: DisplayToken[]) => DisplayToken
+): DisplayToken[] {
+  const joined = line.map((t) => t.chinese).join("");
+  if (!joined.includes(chineseText)) return line;
+  const rebuilt: DisplayToken[] = [];
+  let i = 0;
+  while (i < line.length) {
+    let acc = "";
+    let j = i;
+    while (j < line.length && acc.length < chineseText.length) {
+      acc += line[j].chinese;
+      j++;
+    }
+    if (acc === chineseText) {
+      rebuilt.push(build(line.slice(i, j)));
+      i = j;
+    } else {
+      rebuilt.push(line[i]);
+      i++;
+    }
+  }
+  return rebuilt;
+}
+
+function buildOverrideToken(matched: DisplayToken[], vietnameseText: string, capStyle: CapStyle): DisplayToken {
+  return {
+    chinese: matched.map((t) => t.chinese).join(""),
+    vietnamese: applyCapStyleClient(vietnameseText.split("/")[0], capStyle),
+    rawVietnamese: vietnameseText,
+    source: "name",
+    hanViet: matched.map((t) => t.hanViet).join(" "),
+    capStyle,
+  };
+}
+
+/**
+ * Applies every entry in a personal-override layer (see
+ * src/lib/clientSync.ts's loadLocalOverrideLayer) over server-provided,
+ * personal-free tokens (see src/lib/novels.ts's tokenizeChapter) --
+ * used both once on mount (this browser's saved overrides for this
+ * novel) and, via a single-entry map, right after a fresh save so it
+ * appears instantly without waiting for a re-navigation. Longest
+ * chineseText first, so a longer override wins over a shorter one that
+ * happens to be a substring of it (mirrors the real tokenizer's
+ * longest-match rule).
+ */
+function applyOverridesToLines(
+  lines: DisplayToken[][],
+  overrides: Map<string, { vietnameseText: string; capStyle: CapStyle }>
+): DisplayToken[][] {
+  if (overrides.size === 0) return lines;
+  const entries = [...overrides.entries()].sort((a, b) => b[0].length - a[0].length);
+  return lines.map((line) => {
+    let current = line;
+    for (const [chineseText, { vietnameseText, capStyle }] of entries) {
+      current = mergeRunIntoLine(current, chineseText, (matched) =>
+        buildOverrideToken(matched, vietnameseText, capStyle)
+      );
+    }
+    return current;
+  });
+}
+
 export function ChapterReader({
   novelSlug,
+  chapterNumber,
   lines,
   canPromote,
   canApplyGlobally,
+  isSignedIn,
 }: ChapterReaderProps) {
   const showToast = useToast();
   const [tokenLines, setTokenLines] = useState(lines);
@@ -64,6 +149,32 @@ export function ChapterReader({
   const [capStyle, setCapStyle] = useState<CapStyle>("NONE");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // The server's tokens never include this reader's personal overrides
+  // (see src/lib/novels.ts's tokenizeChapter) -- apply whatever's saved
+  // in this browser's IndexedDB on top once per chapter view. Runs for
+  // both anonymous and signed-in readers: for a signed-in reader,
+  // ClientSyncBoundary.tsx is what keeps this IndexedDB copy in sync
+  // with Postgres in the first place. Relies on the parent keying
+  // `<ChapterReader key={chapterNumber}>` to force a fresh mount (and
+  // therefore a fresh `useState(lines)`) per chapter view, rather than
+  // resetting tokenLines from an effect.
+  useEffect(() => {
+    let cancelled = false;
+    loadLocalOverrideLayer(novelSlug).then(({ translations, capStyles }) => {
+      if (cancelled || translations.size === 0) return;
+      const overrides = new Map(
+        [...translations].map(([chineseText, vietnameseText]) => [
+          chineseText,
+          { vietnameseText, capStyle: capStyles.get(chineseText) ?? "NONE" },
+        ])
+      );
+      setTokenLines((prev) => applyOverridesToLines(prev, overrides));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [novelSlug]);
 
   const spanTokens = useMemo(() => {
     if (!selection) return null;
@@ -128,25 +239,84 @@ export function ChapterReader({
   }, [Boolean(selection)]);
 
   function reuseEntry(entry: ReuseEntry) {
+    if (entry.track === "name") {
+      setHanVietCapitalized(entry.vietnameseText);
+      return;
+    }
     setTranslation(entry.vietnameseText);
     setCapStyle(entry.capStyle);
   }
 
-  async function submit(url: string, successMessage: string) {
-    if (!chinese.trim() || !translation.trim()) {
+  // Phrase-track saves use the Tr/capStyle fields; name-track quick-adds
+  // reuse the HV field's value directly with capStyle forced to
+  // ALL_WORDS -- see SpanEditor.tsx's "Tên riêng / Danh từ" block.
+  function valueFor(track: OverrideTrack): { vietnameseText: string; capStyle: CapStyle } {
+    return track === "name"
+      ? { vietnameseText: hanVietCapitalized.trim(), capStyle: "ALL_WORDS" }
+      : { vietnameseText: translation.trim(), capStyle };
+  }
+
+  // Optimistically collapses the just-saved span into a single merged
+  // token wherever it appears in the currently-rendered chapter -- the
+  // next real navigation re-tokenizes from the server and reconciles
+  // fully. Shared by every action (personal/promote/global) and both
+  // anonymous and signed-in paths.
+  function applyLocalMerge(vietnameseText: string, capStyleToSend: CapStyle) {
+    setTokenLines((prev) =>
+      prev.map((tline) =>
+        mergeRunIntoLine(tline, chinese, (matched) => buildOverrideToken(matched, vietnameseText, capStyleToSend))
+      )
+    );
+  }
+
+  async function saveOverride(action: "personal" | "promote" | "global", track: OverrideTrack) {
+    const { vietnameseText, capStyle: capStyleToSend } = valueFor(track);
+    if (!chinese.trim() || !vietnameseText) {
       setError("Bản dịch không được để trống.");
       return;
     }
+
+    // Anonymous personal save: IndexedDB only, no server round-trip --
+    // never creates a UserWordOverride/UserNameOverride row (see
+    // src/lib/clientSync.ts and the planning doc's section 3). Promote/
+    // global are never reachable here for an anonymous reader --
+    // canPromote/canApplyGlobally are always false without a session.
+    if (action === "personal" && !isSignedIn) {
+      setSaving(true);
+      await putPersonalOverride({
+        novelSlug,
+        chineseText: chinese,
+        vietnameseText,
+        capStyle: capStyleToSend,
+        track,
+        updatedAt: new Date().toISOString(),
+      });
+      setSaving(false);
+      showToast("Đã lưu (chỉ trên trình duyệt này).");
+      applyLocalMerge(vietnameseText, capStyleToSend);
+      setSelection(null);
+      return;
+    }
+
+    const url =
+      action === "personal"
+        ? `/api/novels/${novelSlug}/overrides`
+        : action === "promote"
+          ? `/api/novels/${novelSlug}/overrides/promote`
+          : "/api/dictionary/global";
+    const successMessage =
+      action === "personal"
+        ? "Đã lưu (chỉ mình bạn thấy)."
+        : action === "promote"
+          ? "Đã áp dụng cho mọi người đọc truyện này."
+          : "Đã áp dụng cho toàn bộ từ điển.";
+
     setSaving(true);
     setError(null);
     const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chineseText: chinese,
-        vietnameseText: translation.trim(),
-        capStyle,
-      }),
+      body: JSON.stringify({ chineseText: chinese, vietnameseText, capStyle: capStyleToSend, track }),
     });
     setSaving(false);
 
@@ -157,55 +327,28 @@ export function ChapterReader({
     }
     showToast(successMessage);
 
-    // Optimistically collapse the saved span into a single merged token
-    // wherever it appears in the currently-rendered chapter -- the next
-    // real navigation re-tokenizes from the server and reconciles fully.
-    const mergedToken: DisplayToken = {
-      chinese,
-      vietnamese: applyCapStyleClient(translation.trim().split("/")[0], capStyle),
-      rawVietnamese: translation.trim(),
-      source: "name",
-      hanViet,
-      capStyle,
-    };
-    setTokenLines((prev) =>
-      prev.map((tline) => {
-        // No separator here -- must match how `chinese` itself is built
-        // (spanTokens.map(t => t.chinese).join("")) above, or a genuine
-        // multi-token match (the common case: merging several
-        // single-character tokens into one new phrase/Name) is missed
-        // and this whole line is skipped, leaving the old tokens on
-        // screen until the next full page load.
-        const joined = tline.map((t) => t.chinese).join("");
-        if (!joined.includes(chinese)) return tline;
-        // Rebuild the line, replacing any exact run of tokens whose
-        // concatenated chinese text equals the saved span with one
-        // merged token.
-        const rebuilt: DisplayToken[] = [];
-        let i = 0;
-        while (i < tline.length) {
-          let acc = "";
-          let j = i;
-          while (j < tline.length && acc.length < chinese.length) {
-            acc += tline[j].chinese;
-            j++;
-          }
-          if (acc === chinese) {
-            rebuilt.push(mergedToken);
-            i = j;
-          } else {
-            rebuilt.push(tline[i]);
-            i++;
-          }
-        }
-        return rebuilt;
-      })
-    );
+    if (action === "personal") {
+      // Signed-in personal save: Postgres stays the durable copy; mirror
+      // into IndexedDB too so it's available instantly next visit even
+      // before any login-sync round trip.
+      await putPersonalOverride({
+        novelSlug,
+        chineseText: chinese,
+        vietnameseText,
+        capStyle: capStyleToSend,
+        track,
+        updatedAt: new Date().toISOString(),
+      });
+    }
+
+    applyLocalMerge(vietnameseText, capStyleToSend);
     setSelection(null);
   }
 
   return (
-    <article className="prose-reading text-lg">
+    <>
+      <CandidateNamesPanel novelSlug={novelSlug} chapterNumber={chapterNumber} isSignedIn={isSignedIn} />
+      <article className="prose-reading text-lg">
       {tokenLines.map((line, lineIndex) => (
         <p key={lineIndex} className="mb-4">
           {line.length === 0
@@ -267,23 +410,15 @@ export function ChapterReader({
             canApplyGlobally={canApplyGlobally}
             saving={saving}
             error={error}
-            onSavePersonal={() =>
-              submit(`/api/novels/${novelSlug}/overrides`, "Đã lưu (chỉ mình bạn thấy).")
-            }
-            onPromote={() =>
-              submit(
-                `/api/novels/${novelSlug}/overrides/promote`,
-                "Đã áp dụng cho mọi người đọc truyện này."
-              )
-            }
-            onApplyGlobal={() =>
-              submit("/api/dictionary/global", "Đã áp dụng cho toàn bộ từ điển.")
-            }
+            onSavePersonal={(track: OverrideTrack) => saveOverride("personal", track)}
+            onPromote={(track: OverrideTrack) => saveOverride("promote", track)}
+            onApplyGlobal={(track: OverrideTrack) => saveOverride("global", track)}
             onReuseEntry={reuseEntry}
             onClose={closeEditor}
           />
         )}
       </AnimatePresence>
-    </article>
+      </article>
+    </>
   );
 }

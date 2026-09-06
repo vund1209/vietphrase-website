@@ -8,15 +8,20 @@
 // docs/ARCHITECTURE.md "User management and per-word overrides" for the
 // personal-vs-shared write paths this calls into.
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { motion } from "framer-motion";
+import { useEffect, useRef, useState } from "react";
+import { m } from "framer-motion";
 import { ArrowDown, ArrowUp, CaretLeft, CaretRight, Copy, X } from "@phosphor-icons/react";
 import type { CapStyle } from "@/lib/tokenizer";
+import { useFocusTrap } from "@/lib/useFocusTrap";
+import { STANDARD_TRANSITION } from "@/lib/motion";
+
+export type OverrideTrack = "phrase" | "name";
 
 export interface ReuseEntry {
   chineseText: string;
   vietnameseText: string;
   capStyle: CapStyle;
+  track: OverrideTrack;
 }
 
 const CAP_STYLE_LABEL: Record<CapStyle, string> = {
@@ -46,9 +51,9 @@ interface SpanEditorProps {
   canApplyGlobally: boolean;
   saving: boolean;
   error: string | null;
-  onSavePersonal: () => void;
-  onPromote: () => void;
-  onApplyGlobal: () => void;
+  onSavePersonal: (track: OverrideTrack) => void;
+  onPromote: (track: OverrideTrack) => void;
+  onApplyGlobal: (track: OverrideTrack) => void;
   onReuseEntry: (entry: ReuseEntry) => void;
   onClose: () => void;
 }
@@ -81,6 +86,13 @@ export function SpanEditor({
   const candidates = translation.split("/").map((s) => s.trim()).filter(Boolean);
   const [newCandidate, setNewCandidate] = useState("");
   const [reuseEntries, setReuseEntries] = useState<ReuseEntry[]>([]);
+  const editorRef = useRef<HTMLDivElement>(null);
+  // Unlike AddBookModal/ChapterTocPanel (persistent components toggling
+  // an internal `open` state), SpanEditor is only ever mounted while
+  // "open" -- ChapterReader conditionally renders it, so mount/unmount
+  // itself is the open/close transition. `true` here just means "trap
+  // for as long as this is mounted."
+  useFocusTrap(editorRef, true);
 
   function setCandidates(next: string[]) {
     onTranslationChange(next.join("/"));
@@ -131,12 +143,16 @@ export function SpanEditor({
   }, [novelSlug, chinese]);
 
   return (
-    <motion.div
+    <m.div
+      ref={editorRef}
       data-span-editor="true"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Sửa từ điển"
       initial={{ y: "100%" }}
       animate={{ y: 0 }}
       exit={{ y: "100%" }}
-      transition={{ duration: 0.25, ease: "easeOut" }}
+      transition={STANDARD_TRANSITION}
       className="fixed inset-x-0 bottom-0 z-50 max-h-[80vh] overflow-y-auto rounded-t-xl border-t border-border bg-card p-4 shadow-lg"
     >
       <div className="mx-auto flex max-w-3xl flex-col gap-2">
@@ -284,13 +300,22 @@ export function SpanEditor({
 
         {reuseEntries.length > 0 && (
           <div className="flex flex-col gap-1 text-xs">
-            <span className="text-muted-foreground">Name trong kho</span>
+            <span className="text-muted-foreground">Từ điển trong kho</span>
             {reuseEntries.map((entry) => (
               <div
-                key={entry.chineseText}
+                key={`${entry.track}-${entry.chineseText}`}
                 className="flex items-center justify-between gap-2 rounded-md border border-border px-2 py-1"
               >
                 <span className="truncate">
+                  <span
+                    className={`mr-1.5 rounded px-1 py-0.5 text-[10px] uppercase ${
+                      entry.track === "name"
+                        ? "bg-accent/20 text-accent"
+                        : "bg-secondary/20 text-secondary"
+                    }`}
+                  >
+                    {entry.track === "name" ? "Tên" : "Cụm"}
+                  </span>
                   {entry.chineseText} → {entry.vietnameseText.split("/")[0]}
                 </span>
                 <button
@@ -305,36 +330,84 @@ export function SpanEditor({
           </div>
         )}
 
-        <div className="flex flex-wrap items-center gap-2 pt-1">
-          <button
-            type="button"
-            onClick={onSavePersonal}
-            disabled={saving}
-            className="cursor-pointer rounded-md bg-secondary px-3 py-2 text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 dark:text-neutral-900"
-          >
-            {saving ? "Đang lưu…" : "Lưu riêng"}
-          </button>
-          {canPromote && (
+        {/* Phrase-track actions -- writes to UserWordOverride / NovelWordOverride / GlobalWordOverride. */}
+        <div className="flex flex-col gap-1 rounded-md border border-border p-2">
+          <span className="text-xs font-medium text-muted-foreground">Cụm từ</span>
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              onClick={onPromote}
+              onClick={() => onSavePersonal("phrase")}
               disabled={saving}
-              className="cursor-pointer rounded-md border border-border px-3 py-2 disabled:cursor-not-allowed disabled:opacity-50 hover:bg-muted"
+              className="cursor-pointer rounded-md bg-secondary px-3 py-2 text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 dark:text-neutral-900"
             >
-              Thêm vào từ điển chung
+              {saving ? "Đang lưu…" : "Lưu riêng"}
             </button>
-          )}
-          {canApplyGlobally && (
+            {canPromote && (
+              <button
+                type="button"
+                onClick={() => onPromote("phrase")}
+                disabled={saving}
+                className="cursor-pointer rounded-md border border-border px-3 py-2 disabled:cursor-not-allowed disabled:opacity-50 hover:bg-muted"
+              >
+                Thêm vào từ điển chung
+              </button>
+            )}
+            {canApplyGlobally && (
+              <button
+                type="button"
+                onClick={() => onApplyGlobal("phrase")}
+                disabled={saving}
+                className="cursor-pointer rounded-md border border-accent px-3 py-2 text-accent disabled:cursor-not-allowed disabled:opacity-50 hover:bg-accent/10"
+                title="Áp dụng cho mọi truyện, không chỉ truyện này"
+              >
+                Áp dụng cho tất cả truyện
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Name-track quick-add -- reuses the HV field above as the value to
+            save, so fixing a proper noun/name is one more click on an
+            already-open editor rather than a second modal. Writes to
+            UserNameOverride / Name / GlobalNameOverride. */}
+        <div className="flex flex-col gap-1 rounded-md border border-accent/40 bg-accent/5 p-2">
+          <span className="text-xs font-medium text-muted-foreground">
+            Tên riêng / Danh từ <span className="text-accent">(dùng giá trị ở trường HV)</span>
+          </span>
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              onClick={onApplyGlobal}
-              disabled={saving}
-              className="cursor-pointer rounded-md border border-accent px-3 py-2 text-accent disabled:cursor-not-allowed disabled:opacity-50 hover:bg-accent/10"
-              title="Áp dụng cho mọi truyện, không chỉ truyện này"
+              onClick={() => onSavePersonal("name")}
+              disabled={saving || !hanVietCapitalized.trim()}
+              className="cursor-pointer rounded-md bg-accent px-3 py-2 text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Áp dụng cho tất cả truyện
+              {saving ? "Đang lưu…" : "Lưu riêng"}
             </button>
-          )}
+            {canPromote && (
+              <button
+                type="button"
+                onClick={() => onPromote("name")}
+                disabled={saving || !hanVietCapitalized.trim()}
+                className="cursor-pointer rounded-md border border-border px-3 py-2 disabled:cursor-not-allowed disabled:opacity-50 hover:bg-muted"
+              >
+                Thêm vào từ điển chung
+              </button>
+            )}
+            {canApplyGlobally && (
+              <button
+                type="button"
+                onClick={() => onApplyGlobal("name")}
+                disabled={saving || !hanVietCapitalized.trim()}
+                className="cursor-pointer rounded-md border border-accent px-3 py-2 text-accent disabled:cursor-not-allowed disabled:opacity-50 hover:bg-accent/10"
+                title="Áp dụng cho mọi truyện, không chỉ truyện này"
+              >
+                Áp dụng cho tất cả truyện
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 pt-1">
           <Link
             href={`/novels/${novelSlug}/overrides`}
             className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted"
@@ -351,10 +424,10 @@ export function SpanEditor({
         </div>
         <p className="text-xs text-muted-foreground">
           Cụm dài hơn tạo một mục từ điển riêng, không xóa các mục ngắn hơn -- chúng vẫn áp dụng ở
-          nơi khác.
+          nơi khác. Cụm từ và tên riêng là hai từ điển tách biệt, dùng đúng hàng cho đúng loại sửa.
         </p>
         {error && <p className="text-sm text-destructive">{error}</p>}
       </div>
-    </motion.div>
+    </m.div>
   );
 }

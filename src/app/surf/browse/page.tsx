@@ -1,15 +1,37 @@
 import Link from "next/link";
+import { headers } from "next/headers";
 import { ArrowLeft, Translate } from "@phosphor-icons/react/dist/ssr";
 import { fetchRawHtml } from "@/lib/browserFetch";
+import { HeadlessBrowserRequiredError } from "@/lib/fetchErrors";
 import { buildProxyPage } from "@/lib/htmlProxy";
 import { isSafePublicUrl } from "@/lib/urlSafety";
+import { auth } from "@/lib/auth";
+import { checkRateLimit } from "@/lib/rateLimit";
+import { logActivity } from "@/lib/adminActivity";
 
 // Browse mode: a real, link-clickable proxy of the original site with
 // translation applied in place -- see docs/PLANNED_FEATURES.md's
 // successor design conversation and src/lib/htmlProxy.ts's doc comment
 // for what is and isn't preserved (navigation only, no JS-driven
 // interactivity). Different from the flat-text /surf mode above it.
+// Rate-limited (shared "surf" bucket with /api/surf) and, for an
+// anonymous visitor, forbidden from escalating to a real headless
+// browser launch on a bot-challenged page -- see the planning doc's
+// section 5.
 export const dynamic = "force-dynamic";
+
+const BROWSE_RATE_LIMIT = { windowMs: 10 * 60 * 1000, max: 20 };
+
+function ErrorPage({ message }: { message: string }) {
+  return (
+    <main className="mx-auto flex max-w-3xl flex-1 flex-col gap-4 p-6">
+      <Link href="/surf" className="flex items-center gap-1 text-sm text-muted-foreground hover:underline">
+        <ArrowLeft size={14} /> Đọc web
+      </Link>
+      <p className="text-destructive">{message}</p>
+    </main>
+  );
+}
 
 export default async function BrowsePage({
   searchParams,
@@ -20,42 +42,34 @@ export default async function BrowsePage({
   const translate = translateParam !== "0";
 
   if (!url) {
-    return (
-      <main className="mx-auto flex max-w-3xl flex-1 flex-col gap-4 p-6">
-        <Link href="/surf" className="flex items-center gap-1 text-sm text-muted-foreground hover:underline">
-          <ArrowLeft size={14} /> Đọc web
-        </Link>
-        <p className="text-destructive">Thiếu tham số url.</p>
-      </main>
-    );
+    return <ErrorPage message="Thiếu tham số url." />;
   }
   if (!isSafePublicUrl(url)) {
-    return (
-      <main className="mx-auto flex max-w-3xl flex-1 flex-col gap-4 p-6">
-        <Link href="/surf" className="flex items-center gap-1 text-sm text-muted-foreground hover:underline">
-          <ArrowLeft size={14} /> Đọc web
-        </Link>
-        <p className="text-destructive">
-          URL không hợp lệ (chỉ chấp nhận địa chỉ công khai http/https).
-        </p>
-      </main>
-    );
+    return <ErrorPage message="URL không hợp lệ (chỉ chấp nhận địa chỉ công khai http/https)." />;
+  }
+
+  const [session, headerList] = await Promise.all([auth(), headers()]);
+  const userId = session?.user?.id ? Number(session.user.id) : null;
+
+  const ip = headerList.get("x-forwarded-for")?.split(",")[0].trim() ?? headerList.get("x-real-ip") ?? "unknown";
+  const rateLimit = await checkRateLimit("surf", ip, BROWSE_RATE_LIMIT);
+  if (!rateLimit.allowed) {
+    await logActivity({ userId, action: "rate_limit.denied", targetType: "route", targetId: "/surf/browse" });
+    return <ErrorPage message="Bạn thao tác quá nhanh -- vui lòng thử lại sau ít phút." />;
   }
 
   let bodyHtml: string;
   try {
-    const rawHtml = await fetchRawHtml(url);
+    const rawHtml = await fetchRawHtml(url, { allowHeadless: userId !== null });
     bodyHtml = await buildProxyPage(rawHtml, { pageUrl: url, translate });
   } catch (err) {
+    if (err instanceof HeadlessBrowserRequiredError) {
+      return <ErrorPage message={err.message} />;
+    }
     return (
-      <main className="mx-auto flex max-w-3xl flex-1 flex-col gap-4 p-6">
-        <Link href="/surf" className="flex items-center gap-1 text-sm text-muted-foreground hover:underline">
-          <ArrowLeft size={14} /> Đọc web
-        </Link>
-        <p className="text-destructive">
-          Không tải được trang này: {err instanceof Error ? err.message : "lỗi không rõ"}
-        </p>
-      </main>
+      <ErrorPage
+        message={`Không tải được trang này: ${err instanceof Error ? err.message : "lỗi không rõ"}`}
+      />
     );
   }
 

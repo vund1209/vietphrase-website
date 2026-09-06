@@ -14,6 +14,7 @@
 // package.json; run `npx playwright install chromium` once locally).
 import { chromium as playwrightChromium } from "playwright-core";
 import { looksLikeBotChallenge } from "./botChallenge.ts";
+import { HeadlessBrowserRequiredError } from "./fetchErrors.ts";
 
 const FETCH_HEADERS = {
   "User-Agent":
@@ -51,10 +52,18 @@ export async function fetchWithHeadlessBrowser(url: string): Promise<string> {
   }
 }
 
-export async function fetchRawHtml(url: string): Promise<string> {
+export async function fetchRawHtml(
+  url: string,
+  { allowHeadless = true }: { allowHeadless?: boolean } = {}
+): Promise<string> {
   const plain = await fetchPlain(url);
   if (!looksLikeBotChallenge(plain.status, plain.html)) {
     return plain.html;
+  }
+  if (!allowHeadless) {
+    throw new HeadlessBrowserRequiredError(
+      "Trang này cần chế độ trình duyệt đầy đủ để tải -- cần đăng nhập để dùng chế độ này."
+    );
   }
   return fetchWithHeadlessBrowser(url);
 }

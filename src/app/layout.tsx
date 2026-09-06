@@ -4,6 +4,8 @@ import "./globals.css";
 import { AuthSessionProvider } from "@/components/AuthSessionProvider";
 import { SiteHeader } from "@/components/SiteHeader";
 import { ToastProvider } from "@/components/ToastProvider";
+import { ClientSyncBoundary } from "@/components/ClientSyncBoundary";
+import { MotionProvider } from "@/components/MotionProvider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -60,8 +62,11 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body className="min-h-full flex flex-col bg-background text-foreground">
         <AuthSessionProvider>
           <ToastProvider>
-            <SiteHeader />
-            {children}
+            <MotionProvider>
+              <ClientSyncBoundary />
+              <SiteHeader />
+              {children}
+            </MotionProvider>
           </ToastProvider>
         </AuthSessionProvider>
       </body>

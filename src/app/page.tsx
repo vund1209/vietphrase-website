@@ -2,10 +2,10 @@ import Link from "next/link";
 import { CaretRight, Translate } from "@phosphor-icons/react/dist/ssr";
 import { prisma } from "@/lib/prisma";
 import { auth, isAdmin } from "@/lib/auth";
-import { getReaderId } from "@/lib/readerId";
 import { AddBookModal } from "./AddBookModal";
 import { NovelCard } from "@/components/NovelCard";
 import { NovelGrid } from "@/components/NovelGrid";
+import { AnonymousContinueReading } from "@/components/AnonymousContinueReading";
 
 // Library/reader pages show live, per-request data (novels/chapters get
 // added and translated at runtime) -- never statically prerender these.
@@ -17,8 +17,7 @@ export const dynamic = "force-dynamic";
 const LIBRARY_PREVIEW_SIZE = 8;
 
 export default async function HomePage() {
-  const readerId = await getReaderId();
-  const [novels, novelCount, session, inProgress] = await Promise.all([
+  const [novels, novelCount, session] = await Promise.all([
     prisma.novel.findMany({
       orderBy: { createdAt: "desc" },
       take: LIBRARY_PREVIEW_SIZE,
@@ -26,16 +25,18 @@ export default async function HomePage() {
     }),
     prisma.novel.count(),
     auth(),
-    readerId
-      ? prisma.readingProgress.findMany({
-          where: { readerId },
-          orderBy: { updatedAt: "desc" },
-          take: 6,
-          include: { novel: { select: { slug: true, title: true } } },
-        })
-      : Promise.resolve([]),
   ]);
   const canDelete = isAdmin(session?.user?.role);
+  // Anonymous progress lives entirely client-side (IndexedDB) now -- see
+  // AnonymousContinueReading.tsx and the planning doc's section 4.
+  const inProgress = session?.user
+    ? await prisma.readingProgress.findMany({
+        where: { userId: Number(session.user.id) },
+        orderBy: { updatedAt: "desc" },
+        take: 6,
+        include: { novel: { select: { slug: true, title: true } } },
+      })
+    : [];
 
   return (
     <main className="mx-auto flex max-w-3xl flex-1 flex-col gap-6 p-6">
@@ -59,25 +60,29 @@ export default async function HomePage() {
         </div>
       </Link>
 
-      {inProgress.length > 0 && (
-        <section className="flex flex-col gap-3">
-          <h2 className="font-display text-xl font-semibold">Tiếp tục đọc</h2>
-          <div className="flex flex-col divide-y divide-border rounded-lg border border-border bg-card">
-            {inProgress.map((p) => (
-              <Link
-                key={p.novel.slug}
-                href={`/novels/${p.novel.slug}/chapters/${p.chapterNumber}`}
-                className="flex items-center justify-between gap-3 px-4 py-3 transition-colors hover:bg-muted"
-              >
-                <span className="truncate font-medium">{p.novel.title}</span>
-                <span className="flex shrink-0 items-center gap-1 text-sm text-muted-foreground">
-                  Chương {p.chapterNumber}
-                  <CaretRight size={14} />
-                </span>
-              </Link>
-            ))}
-          </div>
-        </section>
+      {session?.user ? (
+        inProgress.length > 0 && (
+          <section className="flex flex-col gap-3">
+            <h2 className="font-display text-xl font-semibold">Tiếp tục đọc</h2>
+            <div className="flex flex-col divide-y divide-border rounded-lg border border-border bg-card">
+              {inProgress.map((p) => (
+                <Link
+                  key={p.novel.slug}
+                  href={`/novels/${p.novel.slug}/chapters/${p.chapterNumber}`}
+                  className="flex items-center justify-between gap-3 px-4 py-3 transition-colors hover:bg-muted"
+                >
+                  <span className="truncate font-medium">{p.novel.title}</span>
+                  <span className="flex shrink-0 items-center gap-1 text-sm text-muted-foreground">
+                    Chương {p.chapterNumber}
+                    <CaretRight size={14} />
+                  </span>
+                </Link>
+              ))}
+            </div>
+          </section>
+        )
+      ) : (
+        <AnonymousContinueReading />
       )}
 
       <section className="flex flex-col gap-3">
@@ -87,7 +92,7 @@ export default async function HomePage() {
             <Link href="/search" className="text-sm text-muted-foreground hover:text-foreground hover:underline">
               Xem tất cả ({novelCount}) →
             </Link>
-            <AddBookModal />
+            <AddBookModal isSignedIn={Boolean(session?.user)} />
           </div>
         </div>
         {novels.length === 0 ? (
@@ -106,6 +111,7 @@ export default async function HomePage() {
                 chapterCount={novel._count.chapters}
                 canDelete={canDelete}
                 description={novel.description}
+                viewCount={novel.viewCount}
               />
             ))}
           </NovelGrid>

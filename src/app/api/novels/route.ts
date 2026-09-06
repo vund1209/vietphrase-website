@@ -1,9 +1,13 @@
+import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { fetchChapterList, extractSourceChapterId } from "@/lib/scraper";
 import { slugFromSourceUrl, withSuffix } from "@/lib/slug";
 import { translateText } from "@/lib/tokenizer";
-import { loadGlobalWordOverrides } from "@/lib/overrides";
+import { loadGlobalOverrides } from "@/lib/overrides";
 import { ensureDictionaryDb } from "@/lib/dictionaryDb";
+import { validateFetchedBook } from "@/lib/embedValidation";
+import { stripDangerousMarkup } from "@/lib/sanitizeText";
+import { logActivity } from "@/lib/adminActivity";
 
 export interface NovelSummary {
   slug: string;
@@ -36,7 +40,16 @@ export async function GET(): Promise<Response> {
   return Response.json({ novels: body });
 }
 
+// Embedding a novel requires login (any role) -- see the planning doc's
+// section 5. Previously open to anyone, which meant no attribution
+// (Novel.addedByUserId) and no way to hold an embedder accountable for
+// what they add.
 export async function POST(request: Request): Promise<Response> {
+  const session = await auth();
+  if (!session?.user) {
+    return Response.json({ error: "Sign in required" }, { status: 401 });
+  }
+
   const body = await request.json().catch(() => null);
   const url = typeof body?.url === "string" ? body.url.trim() : "";
 
@@ -68,13 +81,20 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ error: message }, { status: 422 });
   }
 
-  // No per-novel Name overrides exist yet for a book that isn't in the DB
-  // yet -- global corrections are the only layer that can apply here.
-  const { translations, capStyles } = await loadGlobalWordOverrides();
+  const validationError = validateFetchedBook(fetched);
+  if (validationError) {
+    return Response.json({ error: validationError }, { status: 422 });
+  }
 
-  const originalTitle =
-    fetched.bookTitle?.trim() || `Truyện chưa đặt tên (${new URL(url).hostname})`;
+  // No per-novel overrides exist yet for a book that isn't in the DB yet --
+  // global corrections (both tracks) are the only layer that can apply here.
+  const { translations, capStyles } = await loadGlobalOverrides();
+
+  const originalTitle = stripDangerousMarkup(
+    fetched.bookTitle?.trim() || `Truyện chưa đặt tên (${new URL(url).hostname})`
+  );
   const title = translateText(originalTitle, translations, capStyles);
+  const originalDescription = fetched.description ? stripDangerousMarkup(fetched.description) : null;
   const baseSlug = slugFromSourceUrl(url);
 
   // `data/seed/dictionary_seed.db` reasoning aside, this is a small
@@ -84,23 +104,25 @@ export async function POST(request: Request): Promise<Response> {
     slug = withSuffix(baseSlug, attempt + 1);
   }
 
+  const userId = Number(session.user.id);
   const novel = await prisma.novel.create({
     data: {
       slug,
       title,
       originalTitle,
-      description: fetched.description ? translateText(fetched.description, translations, capStyles) : null,
-      originalDescription: fetched.description,
+      description: originalDescription ? translateText(originalDescription, translations, capStyles) : null,
+      originalDescription,
       coverImageUrl: fetched.coverImageUrl,
       author: fetched.author,
       sourceUrl: url,
       status: "READY",
+      addedByUserId: userId,
       chapters: {
         createMany: {
           data: fetched.chapters.map((c, i) => ({
             chapterNumber: i + 1,
-            title: translateText(c.title, translations, capStyles),
-            originalTitle: c.title,
+            title: translateText(stripDangerousMarkup(c.title), translations, capStyles),
+            originalTitle: stripDangerousMarkup(c.title),
             sourceChapterId: extractSourceChapterId(c.url),
             sourceUrl: c.url,
             status: "PENDING",
@@ -109,6 +131,14 @@ export async function POST(request: Request): Promise<Response> {
       },
     },
     include: { _count: { select: { chapters: true } } },
+  });
+
+  await logActivity({
+    userId,
+    action: "novel.add",
+    targetType: "novel",
+    targetId: novel.slug,
+    metadata: { sourceUrl: url, chapterCount: novel._count.chapters },
   });
 
   return Response.json({ novel, chapterCount: novel._count.chapters }, { status: 201 });

@@ -86,18 +86,46 @@ model Novel {
   // sites, so it's not auto-scraped.
   completionStatus NovelCompletionStatus?
   createdAt     DateTime    @default(now())
+  // SCRAPED (default): embedded from a source URL, admin-managed.
+  // USER_CREATED: authored in this system (manual chapters and/or .txt
+  // import), owner-managed -- see the planning doc's section 8.
+  origin        NovelOrigin @default(SCRAPED)
+  // Who embedded this novel -- null for rows added before embedding
+  // required login, or if that account is later deleted (SetNull, same
+  // pattern as Name.promotedByUserId: losing track of who added a book
+  // isn't worth cascading its deletion). See the planning doc's section 5
+  // ("embedding requires login") and section 6 (clickable "Thêm bởi").
+  // For a USER_CREATED novel, this doubles as *ownership*, not just
+  // attribution -- see src/lib/isOwnerOrAdmin.ts.
+  addedByUserId Int?
+  addedByUser   User?       @relation(fields: [addedByUserId], references: [id], onDelete: SetNull)
+  // Real, incrementally-tracked chapter-view count -- not a placeholder.
+  // Incremented once per chapter view (src/lib/novels.ts's
+  // getOrTranslateChapter). See the planning doc's section 12
+  // ("engagement stats... once there's something real to show").
+  viewCount     Int         @default(0)
 
-  names             Name[]
-  chapters          Chapter[]
-  userWordOverrides UserWordOverride[]
-  readingProgress   ReadingProgress[]
+  names               Name[]
+  novelWordOverrides  NovelWordOverride[]
+  chapters            Chapter[]
+  userWordOverrides   UserWordOverride[]
+  userNameOverrides   UserNameOverride[]
+  readingProgress     ReadingProgress[]
+  tags                NovelTag[]
 
+  @@index([addedByUserId])
   @@map("novels")
 }
 
 enum NovelCompletionStatus {
   ONGOING
   COMPLETED
+}
+
+/// See the planning doc's section 8.
+enum NovelOrigin {
+  SCRAPED
+  USER_CREATED
 }
 
 enum NovelStatus {
@@ -128,15 +156,28 @@ model Chapter {
   // source site's own chapter ID). Reference/dedup only -- chapterNumber
   // remains the sequential index this app routes on.
   sourceChapterId String?
-  sourceUrl      String
-  rawText        String? // Chinese; null until first scraped
+  // Null for a manually-entered or .txt-imported chapter of a
+  // USER_CREATED novel -- there's no source page to point back to. See
+  // the planning doc's section 8.
+  sourceUrl      String?
+  rawText        String? // null until first scraped (SCRAPED) or always populated at creation (USER_CREATED)
   status         ChapterStatus @default(PENDING)
   scrapedAt      DateTime?
   createdAt      DateTime      @default(now())
+  // Whether `rawText` is Chinese (translate as usual) or already
+  // Vietnamese (a USER_CREATED chapter can be either) -- decides whether
+  // getOrTranslateChapter runs the VietPhrase pipeline at all. See the
+  // planning doc's section 8.
+  sourceLanguage SourceLanguage @default(ZH)
 
   @@unique([novelId, chapterNumber])
   @@index([novelId])
   @@map("chapters")
+}
+
+enum SourceLanguage {
+  ZH
+  VI
 }
 
 enum ChapterStatus {
@@ -145,11 +186,13 @@ enum ChapterStatus {
   ERROR // scrape failed
 }
 
-/// Per-novel proper-noun overrides -- the dictionary users actually
-/// curate over time, one novel at a time. Checked before the SQLite
-/// seed's global names/pronouns/words during tokenization (see
-/// docs/VIETPHRASE_CORE.md). Starts empty for every novel; there is no
-/// bulk import into this table.
+/// Per-novel proper-noun overrides (the NAME track of the per-novel tier
+/// -- see NovelWordOverride for its PHRASE-track counterpart; the two
+/// used to be conflated in this one table until that split). The
+/// dictionary users actually curate over time, one novel at a time.
+/// Checked before the SQLite seed's global names/pronouns/words during
+/// tokenization (see docs/VIETPHRASE_CORE.md). Starts empty for every
+/// novel; there is no bulk import into this table.
 model Name {
   id             Int      @id @default(autoincrement())
   chineseText    String
@@ -188,6 +231,37 @@ enum NameCapStyle {
   ALL_WORDS // capitalize the first letter of every word (full proper names)
 }
 
+/// Per-novel PHRASE-track overrides -- the counterpart split out of `Name`
+/// (which stays the per-novel NAME track). A phrase correction ("this verb
+/// reads better as X in this novel") and a proper-noun override ("this
+/// character's name is X") used to write to the same table with no way to
+/// tell them apart later; this table exists so the promotion/management
+/// UI (see /admin, /novels/[slug]/overrides) can treat them separately
+/// while translation itself still merges both (src/lib/overrides.ts).
+/// Field-for-field identical to `Name` by design -- same shape, different
+/// track.
+model NovelWordOverride {
+  id             Int      @id @default(autoincrement())
+  chineseText    String
+  vietnameseText String
+  capStyle       NameCapStyle @default(NONE)
+  phraseLength   Int
+  novelId        Int
+  novel          Novel    @relation(fields: [novelId], references: [id], onDelete: Cascade)
+  source         String
+  isActive       Boolean  @default(true)
+  // See Name.promotedByUserId above -- same meaning, phrase-track copy.
+  promotedByUserId Int?
+  promotedByUser   User?    @relation(fields: [promotedByUserId], references: [id], onDelete: SetNull)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([chineseText, novelId])
+  @@index([phraseLength])
+  @@index([novelId])
+  @@map("novel_word_overrides")
+}
+
 /// Admin-curated corrections that apply across EVERY novel -- unlike
 /// `Name` (scoped to one novel) or `UserWordOverride` (scoped to one
 /// reader, one novel), there was previously no way to fix a translation
@@ -214,6 +288,27 @@ model GlobalWordOverride {
   @@map("global_word_overrides")
 }
 
+/// Admin-curated NAME-track corrections that apply across every novel --
+/// the counterpart split out of `GlobalWordOverride` (which stays the
+/// global PHRASE track), same reasoning as `NovelWordOverride`/`Name`
+/// above. Field-for-field identical to `GlobalWordOverride`.
+model GlobalNameOverride {
+  id             Int          @id @default(autoincrement())
+  chineseText    String       @unique
+  vietnameseText String
+  capStyle       NameCapStyle @default(NONE)
+  phraseLength   Int
+  source         String
+  isActive       Boolean      @default(true)
+  createdById    Int?
+  createdByUser  User?        @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([phraseLength])
+  @@map("global_name_overrides")
+}
+
 /// A registered reader/editor account. Credentials auth only (email +
 /// bcrypt-hashed password) -- see docs/ARCHITECTURE.md "User management
 /// and per-word overrides" for why: this is a small, trusted-editor
@@ -233,11 +328,22 @@ model User {
   createdAt    DateTime @default(now())
 
   wordOverrides UserWordOverride[]
+  nameOverrides UserNameOverride[]
   // Reverse side of Name.promotedByUser above -- no explicit @relation
   // needed since Name<->User has only one FK linking them.
   promotedNames Name[]
+  // Reverse side of NovelWordOverride.promotedByUser above.
+  promotedNovelWordOverrides NovelWordOverride[]
+  readingProgress ReadingProgress[]
   // Reverse side of GlobalWordOverride.createdByUser above.
   globalWordOverrides GlobalWordOverride[]
+  // Reverse side of GlobalNameOverride.createdByUser above.
+  globalNameOverrides GlobalNameOverride[]
+  // Reverse side of Novel.addedByUser above.
+  addedNovels Novel[]
+  activityLog AdminActivityLog[]
+  // Reverse side of NovelTag.addedByUser below.
+  addedNovelTags NovelTag[]
 
   @@map("users")
 }
@@ -279,21 +385,151 @@ model UserWordOverride {
   @@map("user_word_overrides")
 }
 
-/// Per-browser "continue reading" position for one novel. Deliberately
-/// keyed on an opaque `readerId` (a cookie value, see src/lib/readerId.ts)
-/// rather than a User FK: this is a small, few-people app where more than
-/// one physical person can share one login, so tying progress to the
-/// account would make everyone using that login collide on the same
-/// position. Works the same for signed-in and anonymous readers.
+/// A reader's *private* NAME-track override for one novel -- the
+/// counterpart split out of `UserWordOverride` (which stays the personal
+/// PHRASE track), same reasoning as `NovelWordOverride`/`Name` and
+/// `GlobalNameOverride`/`GlobalWordOverride` above. Field-for-field
+/// identical to `UserWordOverride`.
+model UserNameOverride {
+  id             Int      @id @default(autoincrement())
+  userId         Int
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  novelId        Int
+  novel          Novel    @relation(fields: [novelId], references: [id], onDelete: Cascade)
+  chineseText    String
+  vietnameseText String
+  capStyle       NameCapStyle @default(NONE)
+  phraseLength   Int
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([userId, novelId, chineseText])
+  @@index([novelId, phraseLength])
+  @@map("user_name_overrides")
+}
+
+/// A signed-in reader's "continue reading" position for one novel. Only
+/// ever exists for an account -- an anonymous reader's progress lives
+/// entirely client-side (IndexedDB, see src/lib/clientSync.ts) and never
+/// reaches Postgres at all. Used to key on an opaque cookie-based
+/// `readerId` instead (no account tie at all); that approach silently
+/// lost progress on every "clear cookies" or new-device visit, which is
+/// exactly what this schema change fixes -- see the planning doc's
+/// section 4.
 model ReadingProgress {
   id            Int      @id @default(autoincrement())
-  readerId      String
+  userId        Int
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   novelId       Int
   novel         Novel    @relation(fields: [novelId], references: [id], onDelete: Cascade)
   chapterNumber Int
   updatedAt     DateTime @updatedAt
 
-  @@unique([readerId, novelId])
-  @@index([readerId])
+  @@unique([userId, novelId])
+  @@index([userId])
   @@map("reading_progress")
+}
+
+/// Curated preset taxonomy for novel classification -- see the planning
+/// doc's section 13. Deliberately closed-vocabulary: a reader picks from
+/// this list via NovelTag, never creates a Tag row themselves (seeded by
+/// prisma/seed-tags.ts) -- keeps the taxonomy consistent and searchable
+/// instead of free-form tag sprawl.
+model Tag {
+  id       Int    @id @default(autoincrement())
+  name     String // Vietnamese display text, e.g. "Xuyên không"
+  slug     String @unique
+  // "Thể loại" (genre) vs "Yếu tố" (trope/element) -- matches how
+  // eirlystravailai.top itself separates these. Null = uncategorized.
+  category String?
+
+  novels NovelTag[]
+
+  @@map("tags")
+}
+
+/// Many-to-many join between Novel and Tag. Any logged-in reader may add
+/// an existing preset Tag to any novel -- low risk, since they can only
+/// pick from the fixed Tag vocabulary, never invent one -- but removing
+/// one requires being the reader who added it, or an admin (prevents
+/// griefing). See the planning doc's section 13; addedByUserId doubles as
+/// the authorization check for removal, same pattern as
+/// Novel.addedByUserId/src/lib/isOwnerOrAdmin.ts.
+model NovelTag {
+  id            Int      @id @default(autoincrement())
+  novelId       Int
+  novel         Novel    @relation(fields: [novelId], references: [id], onDelete: Cascade)
+  tagId         Int
+  tag           Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  // Null if that account is later deleted (SetNull, same pattern as
+  // Novel.addedByUserId) -- losing track of who tagged a novel isn't
+  // worth cascading the tag's removal.
+  addedByUserId Int?
+  addedByUser   User?    @relation(fields: [addedByUserId], references: [id], onDelete: SetNull)
+  createdAt     DateTime @default(now())
+
+  @@unique([novelId, tagId])
+  @@index([tagId])
+  @@map("novel_tags")
+}
+
+/// Lightweight Postgres-backed rate limiter (see src/lib/rateLimit.ts) --
+/// no external service (Upstash/Redis) added for what's a modest request
+/// volume; this reuses the existing Neon DB. One row per (bucket, ipHash,
+/// windowStart); a request increments the current window's count and is
+/// rejected once it exceeds the caller's configured max. `ipHash` is a
+/// hash, never the raw IP -- this table exists purely to throttle abuse,
+/// not to identify visitors. See the planning doc's section 5.
+model RateLimitBucket {
+  id          Int      @id @default(autoincrement())
+  // Scopes independent limits -- e.g. "surf" is shared by both /api/surf
+  // and /surf/browse so switching between them doesn't bypass the limit.
+  bucket      String
+  ipHash      String
+  windowStart DateTime
+  count       Int      @default(1)
+  updatedAt   DateTime @updatedAt
+
+  @@unique([bucket, ipHash, windowStart])
+  @@index([windowStart])
+  @@map("rate_limit_buckets")
+}
+
+/// Audit trail for admin/embed actions -- who did what, when. `userId` is
+/// nullable to also cover rate-limit denials, which can come from an
+/// anonymous request with no account at all. `targetType`/`targetId` are
+/// a loose (not FK-constrained) reference -- deliberately: a log entry
+/// should survive its target being deleted (e.g. "novel.delete" itself),
+/// so this can never be a real foreign key. See the planning doc's
+/// section 5 and src/lib/adminActivity.ts.
+model AdminActivityLog {
+  id         Int      @id @default(autoincrement())
+  userId     Int?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action     String
+  targetType String?
+  targetId   String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+  @@map("admin_activity_log")
+}
+
+/// Single-row counter bumped whenever any *shared* dictionary tier
+/// changes (NovelWordOverride/Name promotion, GlobalWordOverride/
+/// GlobalNameOverride add or deactivate). Personal overrides
+/// (UserWordOverride/UserNameOverride) deliberately do NOT bump this --
+/// they're applied client-side only (see the planning doc's section 3)
+/// and never affect what src/lib/overrides.ts's loadOverridesForNovel
+/// returns, so bumping on every personal save would invalidate every
+/// reader's cache for no reason. See src/lib/dictionaryVersion.ts and
+/// the planning doc's section 9 (chapter-translation caching without
+/// reintroducing staleness).
+model DictionaryVersion {
+  id      Int @id
+  version Int @default(1)
+
+  @@map("dictionary_version")
 }

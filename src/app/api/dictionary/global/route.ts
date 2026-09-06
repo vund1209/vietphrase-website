@@ -1,11 +1,20 @@
 // Admin-curated corrections that apply to every novel -- see
-// prisma/schema.prisma's GlobalWordOverride model and
+// prisma/schema.prisma's GlobalWordOverride/GlobalNameOverride models and
 // docs/PLANNED_FEATURES.md. Bigger blast radius than a per-novel promote
 // (.../overrides/promote/route.ts), so this is ADMIN-only rather than
-// EDITOR+ADMIN.
+// EDITOR+ADMIN. `track` picks which table this reads/writes -- "phrase"
+// (GlobalWordOverride) or "name" (GlobalNameOverride), see
+// src/lib/overrides.ts's file header.
 import { auth, isAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { validateOverridePair, validateCapStyle } from "@/lib/overrides";
+import { validateOverridePair, validateCapStyle, validateTrack, type OverrideTrack } from "@/lib/overrides";
+import { bumpDictionaryVersion } from "@/lib/dictionaryVersion";
+import { logActivity } from "@/lib/adminActivity";
+
+function trackFromQuery(url: URL): OverrideTrack {
+  const raw = url.searchParams.get("track");
+  return validateTrack(raw) ? raw : "phrase";
+}
 
 // Used by /admin/dictionary to list/search existing entries.
 export async function GET(request: Request): Promise<Response> {
@@ -14,21 +23,24 @@ export async function GET(request: Request): Promise<Response> {
     return Response.json({ error: "Admin role required" }, { status: 403 });
   }
 
-  const q = new URL(request.url).searchParams.get("q")?.trim() ?? "";
-  const entries = await prisma.globalWordOverride.findMany({
-    where: q ? { chineseText: { contains: q } } : {},
-    orderBy: { updatedAt: "desc" },
-    take: 100,
-    select: {
-      id: true,
-      chineseText: true,
-      vietnameseText: true,
-      capStyle: true,
-      isActive: true,
-      updatedAt: true,
-    },
-  });
-  return Response.json({ entries });
+  const url = new URL(request.url);
+  const q = url.searchParams.get("q")?.trim() ?? "";
+  const track = trackFromQuery(url);
+  const where = q ? { chineseText: { contains: q } } : {};
+  const select = {
+    id: true,
+    chineseText: true,
+    vietnameseText: true,
+    capStyle: true,
+    isActive: true,
+    updatedAt: true,
+  } as const;
+
+  const entries =
+    track === "name"
+      ? await prisma.globalNameOverride.findMany({ where, orderBy: { updatedAt: "desc" }, take: 100, select })
+      : await prisma.globalWordOverride.findMany({ where, orderBy: { updatedAt: "desc" }, take: 100, select });
+  return Response.json({ entries, track });
 }
 
 export async function POST(request: Request): Promise<Response> {
@@ -53,24 +65,34 @@ export async function POST(request: Request): Promise<Response> {
   if (!validateCapStyle(capStyle)) {
     return Response.json({ error: "Invalid capStyle" }, { status: 400 });
   }
+  const track: OverrideTrack = validateTrack(body?.track) ? body.track : "phrase";
 
   const adminId = Number(session.user.id);
-  const entry = await prisma.globalWordOverride.upsert({
-    where: { chineseText },
-    create: {
-      chineseText,
-      vietnameseText,
-      capStyle,
-      phraseLength: chineseText.length,
-      source: "admin_edit",
-      createdById: adminId,
-    },
-    update: {
-      vietnameseText,
-      capStyle,
-      isActive: true,
-    },
+  const phraseLength = chineseText.length;
+  const entry =
+    track === "name"
+      ? await prisma.globalNameOverride.upsert({
+          where: { chineseText },
+          create: { chineseText, vietnameseText, capStyle, phraseLength, source: "admin_edit", createdById: adminId },
+          update: { vietnameseText, capStyle, isActive: true },
+        })
+      : await prisma.globalWordOverride.upsert({
+          where: { chineseText },
+          create: { chineseText, vietnameseText, capStyle, phraseLength, source: "admin_edit", createdById: adminId },
+          update: { vietnameseText, capStyle, isActive: true },
+        });
+
+  // See src/lib/overrides.ts's loadOverridesForNovelCached -- invalidates
+  // every reader's cached shared-override layer.
+  await bumpDictionaryVersion();
+
+  await logActivity({
+    userId: adminId,
+    action: "global_dictionary.add",
+    targetType: "global_override",
+    targetId: String(entry.id),
+    metadata: { chineseText, vietnameseText, track },
   });
 
-  return Response.json({ entry });
+  return Response.json({ entry: { ...entry, track } });
 }

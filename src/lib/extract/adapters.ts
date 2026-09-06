@@ -4,7 +4,7 @@
 // (chapterList.ts / chapterContent.ts) demonstrably fails on it.
 import * as cheerio from "cheerio";
 import { extractChapterContent } from "./chapterContent.ts";
-import type { BookMeta, ChapterListItem, SiteAdapter } from "./types";
+import type { BookMeta, ChapterListItem, DiscoverBookListItem, SiteAdapter } from "./types";
 
 // book.sfacg.com: the generic extractor's link-clustering heuristics
 // (chapterList.ts) repeatedly false-positive-matched this site's
@@ -85,12 +85,60 @@ function sfacgGetBookMeta(html: string, pageUrl: string): BookMeta {
   return { title, description, author, coverImageUrl };
 }
 
+// book.sfacg.com/List/'s book-list page (Discover mode's source for this
+// adapter): each entry is its own <ul class="Comic_Pic_List"> containing a
+// cover-image <li> and a text <li> (title/author/genre-tag/synopsis) --
+// confirmed by inspecting the live list page's DOM directly, same approach
+// as sfacgGetBookMeta above. Scoped under .comic_cover (the page's one real
+// list container) so this can't accidentally pick up an unrelated widget
+// reusing the same list-item class elsewhere on the page.
+const SFACG_BOOK_LIST_ITEM_SELECTOR = ".comic_cover ul.Comic_Pic_List";
+
+function sfacgGetBookList(html: string, pageUrl: string): DiscoverBookListItem[] {
+  const $ = cheerio.load(html);
+  const items: DiscoverBookListItem[] = [];
+  const seen = new Set<string>();
+
+  $(SFACG_BOOK_LIST_ITEM_SELECTOR).each((_, el) => {
+    const $el = $(el);
+    const titleLink = $el.find("li strong a[href*='/Novel/']").first();
+    const href = titleLink.attr("href");
+    const title = titleLink.text().trim();
+    if (!href || !title) return;
+
+    let url: string;
+    try {
+      url = new URL(href, pageUrl).toString();
+    } catch {
+      return;
+    }
+    if (seen.has(url)) return;
+    seen.add(url);
+
+    const author = $el.find("li a[href*='/Club/']").first().text().trim() || null;
+    const coverSrc = $el.find("li.Conjunction img").first().attr("src")?.trim();
+    let coverImageUrl: string | null = null;
+    if (coverSrc) {
+      try {
+        coverImageUrl = new URL(coverSrc, pageUrl).toString();
+      } catch {
+        coverImageUrl = null;
+      }
+    }
+
+    items.push({ title, author, coverImageUrl, url });
+  });
+
+  return items;
+}
+
 const sfacgAdapter: SiteAdapter = {
   name: "book.sfacg.com",
   matches: sfacgMatches,
   getChapterList: sfacgGetChapterList,
   getChapterContent: (html) => extractChapterContent(html),
   getBookMeta: sfacgGetBookMeta,
+  getBookList: sfacgGetBookList,
 };
 
 const ADAPTERS: SiteAdapter[] = [sfacgAdapter];

@@ -2,8 +2,10 @@ import Link from "next/link";
 import { MagnifyingGlass } from "@phosphor-icons/react/dist/ssr";
 import { prisma } from "@/lib/prisma";
 import { auth, isAdmin } from "@/lib/auth";
+import { listAllTags } from "@/lib/tags";
 import { NovelCard } from "@/components/NovelCard";
 import { NovelGrid } from "@/components/NovelGrid";
+import { SearchTagFilter } from "@/components/SearchTagFilter";
 import {
   PAGE_SIZE,
   buildNovelOrderBy,
@@ -31,14 +33,23 @@ const SORT_OPTIONS = [
 export default async function SearchPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; source?: string; status?: string; sort?: string; page?: string }>;
+  searchParams: Promise<{
+    q?: string;
+    source?: string;
+    status?: string;
+    author?: string;
+    addedBy?: string;
+    tags?: string;
+    sort?: string;
+    page?: string;
+  }>;
 }) {
   const rawParams = await searchParams;
   const browseQuery = parseNovelBrowseQuery(rawParams);
   const where = buildNovelWhere(browseQuery);
   const orderBy = buildNovelOrderBy(browseQuery.sort);
 
-  const [novels, total, sources, session] = await Promise.all([
+  const [novels, total, sources, session, allTags] = await Promise.all([
     prisma.novel.findMany({
       where,
       orderBy,
@@ -49,15 +60,20 @@ export default async function SearchPage({
     prisma.novel.count({ where }),
     listNovelSources(),
     auth(),
+    listAllTags(),
   ]);
   const canDelete = isAdmin(session?.user?.role);
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const selectedTags = allTags.filter((t) => browseQuery.tags.includes(t.slug));
 
   function pageHref(page: number): string {
     const params = new URLSearchParams();
     if (browseQuery.q) params.set("q", browseQuery.q);
     if (browseQuery.source) params.set("source", browseQuery.source);
     if (browseQuery.status) params.set("status", browseQuery.status);
+    if (browseQuery.author) params.set("author", browseQuery.author);
+    if (browseQuery.addedBy) params.set("addedBy", String(browseQuery.addedBy));
+    if (browseQuery.tags.length > 0) params.set("tags", browseQuery.tags.join(","));
     if (browseQuery.sort !== "newest") params.set("sort", browseQuery.sort);
     if (page > 1) params.set("page", String(page));
     const qs = params.toString();
@@ -133,6 +149,8 @@ export default async function SearchPage({
         </div>
       </form>
 
+      <SearchTagFilter allTags={allTags} selectedTags={selectedTags} />
+
       <p className="text-sm text-muted-foreground">
         {total === 0 ? "Không tìm thấy truyện nào." : `${total} truyện`}
       </p>
@@ -156,6 +174,7 @@ export default async function SearchPage({
               chapterCount={novel._count.chapters}
               canDelete={canDelete}
               description={novel.description}
+              viewCount={novel.viewCount}
             />
           ))}
         </NovelGrid>

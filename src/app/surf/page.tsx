@@ -12,7 +12,7 @@
 // around a site rather than reading one page at a time.
 import Link from "next/link";
 import { useState } from "react";
-import { BookOpen, Globe } from "@phosphor-icons/react";
+import { BookOpen, Compass, Globe } from "@phosphor-icons/react";
 
 interface SurfResult {
   title: string | null;
@@ -69,7 +69,7 @@ export default function SurfPage() {
         className="rounded-md border border-border bg-card px-3 py-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       />
 
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <button
           type="button"
           onClick={handleSurf}
@@ -93,6 +93,16 @@ export default function SurfPage() {
           <span className="font-medium">Duyệt như trang gốc</span>
           <span className="text-xs text-muted-foreground">
             Bấm liên kết, mục lục, chương -- điều hướng như trang thật.
+          </span>
+        </Link>
+        <Link
+          href="/surf/discover"
+          className="flex flex-col items-start gap-2 rounded-lg border border-border bg-card p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
+        >
+          <Compass size={22} className="text-accent" weight="duotone" />
+          <span className="font-medium">Khám phá theo nguồn</span>
+          <span className="text-xs text-muted-foreground">
+            Duyệt danh sách truyện thật từ các trang đã hỗ trợ, không cần dán URL.
           </span>
         </Link>
       </div>

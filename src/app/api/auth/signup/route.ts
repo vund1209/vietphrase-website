@@ -4,6 +4,7 @@
 // page calls before invoking next-auth's signIn().
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
+import { checkRateLimit, getClientIp } from "@/lib/rateLimit";
 
 const MIN_PASSWORD_LENGTH = 8;
 
@@ -13,7 +14,21 @@ const MIN_PASSWORD_LENGTH = 8;
 // stricter pattern.
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+// Tighter than Surf/Browse's limit (see src/lib/rateLimit.ts and the
+// planning doc's section 5) -- account creation is a lower-volume,
+// higher-abuse-potential action than reading, so a stricter cap makes
+// sense per section 11.
+const SIGNUP_RATE_LIMIT = { windowMs: 15 * 60 * 1000, max: 5 };
+
 export async function POST(request: Request): Promise<Response> {
+  const rateLimit = await checkRateLimit("signup", getClientIp(request), SIGNUP_RATE_LIMIT);
+  if (!rateLimit.allowed) {
+    return Response.json(
+      { error: "Bạn thao tác quá nhanh -- vui lòng thử lại sau ít phút." },
+      { status: 429, headers: { "Retry-After": String(rateLimit.retryAfterSeconds) } }
+    );
+  }
+
   const body = await request.json().catch(() => null);
   const email = typeof body?.email === "string" ? body.email.trim().toLowerCase() : "";
   const password = typeof body?.password === "string" ? body.password : "";

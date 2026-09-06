@@ -9,6 +9,12 @@ import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
+import { checkRateLimit, getClientIp } from "@/lib/rateLimit";
+
+// Tighter than Surf/Browse's limit (see src/lib/rateLimit.ts) -- a login
+// attempt is exactly the brute-force-guessing surface that benefits most
+// from a strict cap. See the planning doc's section 11.
+const LOGIN_RATE_LIMIT = { windowMs: 15 * 60 * 1000, max: 10 };
 
 type AppUserRole = "READER" | "EDITOR" | "ADMIN";
 
@@ -36,7 +42,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
       },
-      async authorize(credentials) {
+      async authorize(credentials, request) {
+        const rateLimit = await checkRateLimit("login", getClientIp(request), LOGIN_RATE_LIMIT);
+        if (!rateLimit.allowed) return null;
+
         const email =
           typeof credentials?.email === "string" ? credentials.email.trim().toLowerCase() : "";
         const password = typeof credentials?.password === "string" ? credentials.password : "";
