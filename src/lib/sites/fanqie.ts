@@ -95,12 +95,4 @@ export const fanqieSite: SiteDefinition = {
   getChapterContent: fanqieGetChapterContent,
   getBookMeta: fanqieGetBookMeta,
   preprocessHtml: fanqiePreprocessHtml,
-  // No `discover`: the real browse/rank list loads via internal JSON
-  // endpoints gated behind a msToken/a_bogus signed-request scheme
-  // (ByteDance's own anti-automation token, visible in the network log
-  // on a live /library page) -- not a bot-*challenge* fetchHtml would
-  // ever detect/escalate for, just a dynamic endpoint with no legitimate
-  // way for this app to generate a valid token. Not reverse-engineering
-  // it (fragile, rotates) -- this site just isn't offered in Discover
-  // mode, same as any SiteDefinition that omits this optional field.
 };
