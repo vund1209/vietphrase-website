@@ -27,6 +27,7 @@ export function OwnerNovelActions({ novelSlug, novelTitle }: OwnerNovelActionsPr
   const [urlImportOpen, setUrlImportOpen] = useState(false);
   const [importUrl, setImportUrl] = useState("");
   const [urlError, setUrlError] = useState<string | null>(null);
+  const [importProgress, setImportProgress] = useState<{ bytesLoaded: number; bytesTotal: number } | null>(null);
   const [renameOpen, setRenameOpen] = useState(false);
   const [newTitle, setNewTitle] = useState(novelTitle);
   const [renaming, setRenaming] = useState(false);
@@ -77,22 +78,55 @@ export function OwnerNovelActions({ novelSlug, novelTitle }: OwnerNovelActionsPr
     if (!importUrl.trim()) return;
     setImporting(true);
     setUrlError(null);
-    const res = await fetch(`/api/novels/${novelSlug}/chapters/import-url`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url: importUrl.trim() }),
-    });
-    setImporting(false);
-    if (!res.ok) {
-      const body: { error?: string } | null = await res.json().catch(() => null);
-      setUrlError(body?.error ?? "Nhập từ URL thất bại.");
-      return;
+    setImportProgress(null);
+    try {
+      const res = await fetch(`/api/novels/${novelSlug}/chapters/import-url`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: importUrl.trim() }),
+      });
+      if (!res.ok || !res.body) {
+        const body: { error?: string } | null = await res.json().catch(() => null);
+        setUrlError(body?.error ?? "Nhập từ URL thất bại.");
+        return;
+      }
+
+      // Streamed newline-delimited JSON (see the route's own doc
+      // comment) -- headers/status are already committed by the time
+      // this starts, so a failure partway through arrives as the last
+      // line's {type: "error"}, not as an HTTP error status.
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffered = "";
+      let added: number | null = null;
+      let streamError: string | null = null;
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffered += decoder.decode(value, { stream: true });
+        const lines = buffered.split("\n");
+        buffered = lines.pop() ?? "";
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          const msg = JSON.parse(line);
+          if (msg.type === "progress") setImportProgress({ bytesLoaded: msg.bytesLoaded, bytesTotal: msg.bytesTotal });
+          else if (msg.type === "done") added = msg.added;
+          else if (msg.type === "error") streamError = msg.error;
+        }
+      }
+
+      if (streamError || added === null) {
+        setUrlError(streamError ?? "Nhập từ URL thất bại.");
+        return;
+      }
+      showToast(`Đã nhập ${added} chương.`);
+      setUrlImportOpen(false);
+      setImportUrl("");
+      router.refresh();
+    } finally {
+      setImporting(false);
+      setImportProgress(null);
     }
-    const data: { added: number } = await res.json();
-    showToast(`Đã nhập ${data.added} chương.`);
-    setUrlImportOpen(false);
-    setImportUrl("");
-    router.refresh();
   }
 
   async function renameNovel() {
@@ -221,6 +255,22 @@ export function OwnerNovelActions({ novelSlug, novelTitle }: OwnerNovelActionsPr
               className="rounded-md border border-border bg-background px-3 py-2 text-sm"
             />
             <p className="text-xs text-muted-foreground">Hỗ trợ: mega.nz</p>
+            {importProgress && (
+              <div className="flex flex-col gap-1">
+                <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full rounded-full bg-secondary transition-[width]"
+                    style={{
+                      width: `${Math.min(100, (importProgress.bytesLoaded / importProgress.bytesTotal) * 100)}%`,
+                    }}
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {(importProgress.bytesLoaded / 1024 / 1024).toFixed(1)}MB /{" "}
+                  {(importProgress.bytesTotal / 1024 / 1024).toFixed(1)}MB
+                </p>
+              </div>
+            )}
             {urlError && <p className="text-sm text-destructive">{urlError}</p>}
             <div className="flex items-center justify-end gap-2">
               <button
@@ -236,7 +286,11 @@ export function OwnerNovelActions({ novelSlug, novelTitle }: OwnerNovelActionsPr
                 disabled={importing || !importUrl.trim()}
                 className="cursor-pointer rounded-md bg-secondary px-3 py-2 text-sm text-white disabled:cursor-not-allowed disabled:opacity-50 dark:text-neutral-900"
               >
-                {importing ? "Đang nhập…" : "Nhập"}
+                {importing
+                  ? importProgress
+                    ? `Đang tải… ${Math.round((importProgress.bytesLoaded / importProgress.bytesTotal) * 100)}%`
+                    : "Đang nhập…"
+                  : "Nhập"}
               </button>
             </div>
           </div>

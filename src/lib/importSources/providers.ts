@@ -4,7 +4,9 @@
 // resolveAdapter and src/lib/discoverSources.ts's DiscoverSource
 // registry, applied to a different domain (downloading a whole file to
 // hand to the existing .txt-chunking pipeline, not scraping HTML).
-import { megaMatches, megaFetchFile } from "./mega.ts";
+import { megaMatches, megaFetchFile, type DownloadProgress } from "./mega.ts";
+
+export type { DownloadProgress };
 
 export interface ImportSourceProvider {
   name: string;
@@ -16,8 +18,15 @@ export interface ImportSourceProvider {
    * apply src/lib/urlSafety.ts's isSafePublicUrl themselves; this
    * interface doesn't enforce it centrally since not every provider's
    * threat model needs it.
+   *
+   * `onProgress` is best-effort -- a provider that can't report
+   * byte-level progress (e.g. one where the whole file only becomes
+   * available at once, not as a stream) is free to just never call it.
    */
-  fetchFile(url: string): Promise<{ buffer: ArrayBuffer; filename: string | null }>;
+  fetchFile(
+    url: string,
+    onProgress?: (progress: DownloadProgress) => void
+  ): Promise<{ buffer: ArrayBuffer; filename: string | null }>;
 }
 
 const megaProvider: ImportSourceProvider = {

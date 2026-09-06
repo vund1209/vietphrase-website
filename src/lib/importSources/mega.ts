@@ -56,6 +56,11 @@ const MEGA_DOWNLOAD_MAX_CONNECTIONS = 8;
 export class ImportFileTooLargeError extends Error {}
 export class ImportDownloadTimeoutError extends Error {}
 
+export interface DownloadProgress {
+  bytesLoaded: number;
+  bytesTotal: number;
+}
+
 export function megaMatches(url: string): boolean {
   try {
     const parsed = new URL(url);
@@ -85,7 +90,10 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   });
 }
 
-export async function megaFetchFile(url: string): Promise<{ buffer: ArrayBuffer; filename: string | null }> {
+export async function megaFetchFile(
+  url: string,
+  onProgress?: (progress: DownloadProgress) => void
+): Promise<{ buffer: ArrayBuffer; filename: string | null }> {
   return withTimeout(
     (async () => {
       const file = File.fromURL(url);
@@ -97,7 +105,22 @@ export async function megaFetchFile(url: string): Promise<{ buffer: ArrayBuffer;
         );
       }
 
-      const nodeBuffer = await file.downloadBuffer({ maxConnections: MEGA_DOWNLOAD_MAX_CONNECTIONS });
+      // download() (a Readable), not downloadBuffer() -- the stream it
+      // returns emits real "progress" events ({bytesLoaded, bytesTotal},
+      // confirmed directly in megajs's source) as chunks arrive, which
+      // downloadBuffer's plain-Promise interface has no hook for at all.
+      // A 25-60s wait (this feature's own real, tested timing) is long
+      // enough that a static "importing..." label isn't good enough.
+      const stream = file.download({ maxConnections: MEGA_DOWNLOAD_MAX_CONNECTIONS });
+      if (onProgress) {
+        stream.on("progress", (progress: DownloadProgress) => onProgress(progress));
+      }
+
+      const chunks: Buffer[] = [];
+      for await (const chunk of stream) {
+        chunks.push(chunk as Buffer);
+      }
+      const nodeBuffer = Buffer.concat(chunks);
       const buffer = nodeBuffer.buffer.slice(
         nodeBuffer.byteOffset,
         nodeBuffer.byteOffset + nodeBuffer.byteLength

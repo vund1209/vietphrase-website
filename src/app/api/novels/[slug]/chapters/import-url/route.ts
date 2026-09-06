@@ -8,6 +8,16 @@
 // action and can be rate-limited differently later (outbound-fetch
 // abuse has a different profile than upload abuse) without touching
 // the existing route at all.
+//
+// Streams newline-delimited JSON progress events instead of a single
+// JSON response -- a real download here takes 25-60s (this feature's
+// own tested timing), long enough that a static "importing..." label
+// isn't good enough. Auth/URL validation still fail fast with a normal
+// JSON error response *before* any streaming starts (so the client's
+// initial `res.ok` check still works for those); once the stream opens,
+// the final outcome (including failures partway through) is reported as
+// the last line rather than via the HTTP status, since headers are
+// already committed by then.
 import { auth } from "@/lib/auth";
 import { authorizeChapterImport, persistImportedChapters } from "@/lib/chapterImport";
 import { resolveImportSourceProvider } from "@/lib/importSources/providers";
@@ -36,29 +46,38 @@ export async function POST(
     return Response.json({ error: "URL không được hỗ trợ -- hiện chỉ hỗ trợ mega.nz" }, { status: 400 });
   }
 
-  let buffer: ArrayBuffer;
-  try {
-    ({ buffer } = await provider.fetchFile(url));
-  } catch (err) {
-    // Never leak the provider library's internal error text verbatim --
-    // it may reference internal implementation details not meaningful
-    // to a reader (e.g. raw megajs protocol errors).
-    const message = err instanceof Error ? err.message : "Không thể tải file";
-    return Response.json({ error: message }, { status: 502 });
-  }
+  const userId = Number(session!.user!.id);
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream({
+    async start(controller) {
+      const send = (data: unknown) => controller.enqueue(encoder.encode(JSON.stringify(data) + "\n"));
+      try {
+        const { buffer } = await provider.fetchFile(url, (progress) => send({ type: "progress", ...progress }));
 
-  const result = await persistImportedChapters(authResult.novel.id, buffer);
-  if (!result.ok) {
-    return Response.json({ error: result.error }, { status: result.status });
-  }
+        const result = await persistImportedChapters(authResult.novel.id, buffer);
+        if (!result.ok) {
+          send({ type: "error", error: result.error });
+          return;
+        }
 
-  await logActivity({
-    userId: Number(session!.user!.id),
-    action: "chapter.import_url",
-    targetType: "novel",
-    targetId: slug,
-    metadata: { added: result.added, encoding: result.encoding, provider: provider.name },
+        await logActivity({
+          userId,
+          action: "chapter.import_url",
+          targetType: "novel",
+          targetId: slug,
+          metadata: { added: result.added, encoding: result.encoding, provider: provider.name },
+        });
+        send({ type: "done", added: result.added, encoding: result.encoding });
+      } catch (err) {
+        // Never leak the provider library's internal error text verbatim
+        // -- it may reference internal implementation details not
+        // meaningful to a reader (e.g. raw megajs protocol errors).
+        send({ type: "error", error: err instanceof Error ? err.message : "Không thể tải file" });
+      } finally {
+        controller.close();
+      }
+    },
   });
 
-  return Response.json({ added: result.added, encoding: result.encoding });
+  return new Response(stream, { headers: { "Content-Type": "application/x-ndjson" } });
 }
