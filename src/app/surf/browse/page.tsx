@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { headers } from "next/headers";
-import { ArrowLeft, Translate } from "@phosphor-icons/react/dist/ssr";
+import { ArrowLeft, BookOpen, Translate } from "@phosphor-icons/react/dist/ssr";
 import { fetchRawHtml } from "@/lib/browserFetch";
 import { HeadlessBrowserRequiredError } from "@/lib/fetchErrors";
 import { buildProxyPage } from "@/lib/htmlProxy";
@@ -8,6 +8,9 @@ import { isSafePublicUrl } from "@/lib/urlSafety";
 import { auth } from "@/lib/auth";
 import { checkRateLimit } from "@/lib/rateLimit";
 import { logActivity } from "@/lib/adminActivity";
+import { tryGetBrowseChapterList } from "@/lib/browseChapterList";
+import { translateText } from "@/lib/tokenizer";
+import { ensureDictionaryDb } from "@/lib/dictionaryDb";
 
 // Browse mode: a real, link-clickable proxy of the original site with
 // translation applied in place -- see docs/PLANNED_FEATURES.md's
@@ -59,8 +62,9 @@ export default async function BrowsePage({
   }
 
   let bodyHtml: string;
+  let rawHtml: string;
   try {
-    const rawHtml = await fetchRawHtml(url, { allowHeadless: userId !== null });
+    rawHtml = await fetchRawHtml(url, { allowHeadless: userId !== null });
     bodyHtml = await buildProxyPage(rawHtml, { pageUrl: url, translate });
   } catch (err) {
     if (err instanceof HeadlessBrowserRequiredError) {
@@ -73,7 +77,18 @@ export default async function BrowsePage({
     );
   }
 
+  // Best-effort only -- see browseChapterList.ts's doc comment. A source
+  // this doesn't recognize (or a page that just isn't a book landing
+  // page, e.g. a chapter page itself) simply renders with no panel,
+  // falling back to whatever "start reading" affordance the proxied page
+  // itself has.
+  const rawChapters = await tryGetBrowseChapterList(rawHtml, url, userId !== null);
+  if (translate && rawChapters.length > 0) await ensureDictionaryDb();
+  const chapters = rawChapters.map((c) => ({ ...c, title: translate ? translateText(c.title) : c.title }));
+
   const toggleTranslateHref = `/surf/browse?url=${encodeURIComponent(url)}&translate=${translate ? "0" : "1"}`;
+  const browseHref = (chapterUrl: string) =>
+    `/surf/browse?url=${encodeURIComponent(chapterUrl)}&translate=${translate ? "1" : "0"}`;
 
   return (
     <main className="mx-auto flex max-w-4xl flex-1 flex-col gap-3 p-6">
@@ -94,6 +109,32 @@ export default async function BrowsePage({
           </Link>
         </div>
       </div>
+
+      {chapters.length > 0 && (
+        <div className="flex flex-col gap-2 rounded-lg border border-border bg-card p-4">
+          <Link
+            href={browseHref(chapters[0].url)}
+            className="flex items-center justify-center gap-2 rounded-lg bg-secondary px-4 py-3 text-center font-medium text-white transition-opacity hover:opacity-90 dark:text-neutral-900"
+          >
+            <BookOpen size={18} weight="fill" />
+            Bắt đầu đọc — {chapters[0].title}
+          </Link>
+          <p className="text-xs text-muted-foreground">Danh sách chương ({chapters.length})</p>
+          <ul className="flex max-h-64 flex-col divide-y divide-border overflow-y-auto">
+            {chapters.map((chapter) => (
+              <li key={chapter.url}>
+                <Link
+                  href={browseHref(chapter.url)}
+                  className="block truncate rounded-md px-2 py-2 text-sm transition-colors hover:bg-muted"
+                >
+                  {chapter.title}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <div
         className="prose-reading rounded-lg border border-dashed border-border bg-card p-6"
         // Safe: buildProxyPage strips <script>, inline event-handler

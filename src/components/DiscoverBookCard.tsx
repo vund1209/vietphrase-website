@@ -17,14 +17,21 @@ import type { DiscoverBookListItem } from "@/lib/extract/types";
 import { EmbedDiscoverBookButton } from "./EmbedDiscoverBookButton";
 
 interface DiscoverBookCardProps {
-  book: DiscoverBookListItem;
+  book: DiscoverBookListItem & { translatedTitle: string; translatedDescription: string | null };
   isSignedIn: boolean;
 }
 
+// h-full + the button wrapper's mt-auto (below) keep "Nhúng" pinned to the
+// same row position across a grid row regardless of how many lines a
+// given card's title/description wrap to -- the grid cell itself already
+// stretches to the row's tallest card (CSS Grid's default align-items),
+// but this inner flex column needs to actually fill that stretched
+// height for the button to land at a consistent baseline instead of
+// floating right under whatever shorter text a neighboring card has.
 export function DiscoverBookCard({ book, isSignedIn }: DiscoverBookCardProps) {
   const browseHref = `/surf/browse?url=${encodeURIComponent(book.url)}`;
   return (
-    <div className="group flex flex-col gap-2">
+    <div className="group flex h-full flex-col gap-2">
       <Link
         href={browseHref}
         className="flex flex-col gap-2 rounded-lg motion-safe:transition-transform motion-safe:duration-200 motion-safe:group-hover:-translate-y-0.5"
@@ -35,8 +42,18 @@ export function DiscoverBookCard({ book, isSignedIn }: DiscoverBookCardProps) {
             <img src={book.coverImageUrl} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
           ) : null}
         </div>
-        <div className="line-clamp-2 text-sm font-medium">{book.title}</div>
+        <div className="flex flex-col gap-0.5">
+          <span className="line-clamp-2 text-sm font-medium">{book.translatedTitle}</span>
+          {/* Raw source-language title kept alongside the translation --
+              readers cross-referencing the source site (or who just read
+              Chinese) need this, and dictionary-based translation of a
+              title in isolation (no sentence context) is often rough. */}
+          <span className="line-clamp-1 text-xs italic text-muted-foreground">{book.title}</span>
+        </div>
       </Link>
+      {book.translatedDescription && (
+        <p className="line-clamp-2 text-xs text-muted-foreground">{book.translatedDescription}</p>
+      )}
       <div className="flex items-center justify-between gap-1 text-xs text-muted-foreground">
         <span className="truncate">{book.author ?? "Không rõ tác giả"}</span>
         <a
@@ -49,7 +66,9 @@ export function DiscoverBookCard({ book, isSignedIn }: DiscoverBookCardProps) {
           <ArrowSquareOut size={13} />
         </a>
       </div>
-      <EmbedDiscoverBookButton url={book.url} isSignedIn={isSignedIn} />
+      <div className="mt-auto">
+        <EmbedDiscoverBookButton url={book.url} isSignedIn={isSignedIn} />
+      </div>
     </div>
   );
 }

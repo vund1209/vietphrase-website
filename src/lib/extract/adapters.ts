@@ -127,7 +127,10 @@ function sfacgGetBookList(html: string, pageUrl: string): DiscoverBookListItem[]
       }
     }
 
-    items.push({ title, author, coverImageUrl, url });
+    // book.sfacg.com's own list rows carry no synopsis/blurb at all
+    // (confirmed directly against the live list page's DOM) -- only
+    // title/author/cover/status/category, unlike 69shuba.com's list rows.
+    items.push({ title, description: null, author, coverImageUrl, url });
   });
 
   return items;
@@ -338,8 +341,12 @@ function shubaGetBookList(html: string, pageUrl: string): DiscoverBookListItem[]
         coverImageUrl = null;
       }
     }
+    // A short (~2-line-clamped, .ellipsis_2) synopsis blurb -- confirmed
+    // directly on the live list page's DOM, oddly marked up as a plain
+    // text node inside an <ol> with no nested elements at all.
+    const description = $el.find(".ellipsis_2").first().text().trim() || null;
 
-    items.push({ title, author, coverImageUrl, url });
+    items.push({ title, description, author, coverImageUrl, url });
   });
 
   return items;

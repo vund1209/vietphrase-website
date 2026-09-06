@@ -22,6 +22,8 @@ export interface BookMeta {
 /** One entry in a source site's own browse/rankings list -- see getBookList below. */
 export interface DiscoverBookListItem {
   title: string;
+  /** Raw, untranslated short synopsis shown on the list page itself, if the source's own list view includes one (not every source does -- e.g. book.sfacg.com's list rows carry no blurb at all). */
+  description: string | null;
   author: string | null;
   coverImageUrl: string | null;
   /** The book's own landing/detail page on the source site -- what an embed action passes to POST /api/novels. */

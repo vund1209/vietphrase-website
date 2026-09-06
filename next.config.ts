@@ -10,21 +10,50 @@ const nextConfig: NextConfig = {
   // require; outputFileTracingIncludes below is belt-and-suspenders to
   // make sure browsers.json specifically gets traced in.
   //
+  // @sparticuz/chromium (browserFetch.ts's launchBrowser, production
+  // branch only) needs the same treatment for its own non-JS payload --
+  // it ships Chromium itself as prebuilt .br archives under bin/, loaded
+  // at runtime via executablePath(), not requirable/bundlable at all.
+  // Confirmed in production: without bin/** traced in, a route that
+  // actually reaches the headless-browser fallback fails with "The input
+  // directory '/var/task/node_modules/@sparticuz/chromium/bin' does not
+  // exist" the first time a source needs it (69shuba.com via Discover
+  // mode) -- every route below reaches the same launchBrowser() and was
+  // equally missing this, just not yet exercised against a Cloudflare-
+  // gated source in production.
+  //
   // Scoped to just the routes that actually reach a headless-browser
   // launch (via src/lib/scraper.ts's fetchHtml or src/lib/browserFetch.ts's
   // fetchRawHtml), not a blanket "/**" -- see the planning doc's section 9
   // (one of two "clearly wrong as shipped" regressions called out
   // regardless of measurement: every route's deployed function was
   // needlessly bundling this). Every entry that transitively scrapes
-  // (book add, metadata/chapter re-fetch, lazy chapter scrape, Surf/Browse):
+  // (book add, metadata/chapter re-fetch, lazy chapter scrape, Surf/Browse,
+  // Surf/Discover):
   outputFileTracingIncludes: {
-    "/api/novels": ["./node_modules/playwright-core/browsers.json"],
-    "/api/novels/[slug]/refetch-metadata": ["./node_modules/playwright-core/browsers.json"],
-    "/api/novels/[slug]/refetch-chapters": ["./node_modules/playwright-core/browsers.json"],
-    "/api/novels/[slug]/chapters/[number]": ["./node_modules/playwright-core/browsers.json"],
-    "/novels/[slug]/chapters/[number]": ["./node_modules/playwright-core/browsers.json"],
-    "/api/surf": ["./node_modules/playwright-core/browsers.json"],
-    "/surf/browse": ["./node_modules/playwright-core/browsers.json"],
+    "/api/novels": ["./node_modules/playwright-core/browsers.json", "./node_modules/@sparticuz/chromium/bin/**"],
+    "/api/novels/[slug]/refetch-metadata": [
+      "./node_modules/playwright-core/browsers.json",
+      "./node_modules/@sparticuz/chromium/bin/**",
+    ],
+    "/api/novels/[slug]/refetch-chapters": [
+      "./node_modules/playwright-core/browsers.json",
+      "./node_modules/@sparticuz/chromium/bin/**",
+    ],
+    "/api/novels/[slug]/chapters/[number]": [
+      "./node_modules/playwright-core/browsers.json",
+      "./node_modules/@sparticuz/chromium/bin/**",
+    ],
+    "/novels/[slug]/chapters/[number]": [
+      "./node_modules/playwright-core/browsers.json",
+      "./node_modules/@sparticuz/chromium/bin/**",
+    ],
+    "/api/surf": ["./node_modules/playwright-core/browsers.json", "./node_modules/@sparticuz/chromium/bin/**"],
+    "/surf/browse": ["./node_modules/playwright-core/browsers.json", "./node_modules/@sparticuz/chromium/bin/**"],
+    "/surf/discover/[source]": [
+      "./node_modules/playwright-core/browsers.json",
+      "./node_modules/@sparticuz/chromium/bin/**",
+    ],
   },
   serverExternalPackages: ["playwright-core", "@sparticuz/chromium"],
   // See the planning doc's section 5. /surf/browse is deliberately

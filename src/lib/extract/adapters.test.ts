@@ -117,6 +117,7 @@ test("getBookList extracts title/author/cover/url per book, scoped to .comic_cov
   assert.equal(books.length, 2);
   assert.deepEqual(books[0], {
     title: "Truyện mẫu một",
+    description: null,
     author: "Tác giả A",
     coverImageUrl: "http://rs.sfacg.com/cover/one.jpg",
     url: "https://book.sfacg.com/Novel/100001/",
@@ -222,6 +223,7 @@ test("getBookList takes the FIRST label as author, not the second (serialization
             <div class="newnav">
               <h3><a href="/book/1.htm">Truyện mẫu một</a></h3>
               <div class="labelbox"><label>Tác giả mẫu</label><label>连载</label></div>
+              <ol class="ellipsis_2">Đoạn giới thiệu ngắn mẫu.</ol>
             </div>
           </li>
           <li>
@@ -240,8 +242,10 @@ test("getBookList takes the FIRST label as author, not the second (serialization
   assert.equal(books.length, 2);
   assert.equal(books[0].author, "Tác giả mẫu");
   assert.equal(books[0].coverImageUrl, "https://cdn.example.com/1.jpg");
+  assert.equal(books[0].description, "Đoạn giới thiệu ngắn mẫu.");
   assert.equal(books[1].author, "Tác giả khác");
   assert.equal(books[1].coverImageUrl, "https://cdn.example.com/2.jpg");
+  assert.equal(books[1].description, null);
   assert.ok(!books.some((b) => b.author === "连载" || b.author === "完结"));
 });
 

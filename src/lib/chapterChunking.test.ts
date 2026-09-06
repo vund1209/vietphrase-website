@@ -62,3 +62,22 @@ test("ignores a heading-shaped line that is implausibly long (not a real heading
   assert.equal(chapters.length, 1);
   assert.equal(chapters[0].title, "Chương 1");
 });
+
+test("splits a heading's body further if it grows far past a normal chapter (undetected markers in that span)", () => {
+  // A real heading followed by an enormous, marker-less body (simulating
+  // a stretch of the source file whose chapter markers use a format this
+  // parser doesn't recognize) must not collapse into one giant chunk --
+  // it should still land in file order, just sub-split for readability.
+  const hugeBody = ("甲甲甲甲甲甲甲甲甲甲。".repeat(2000) + "\n").repeat(3);
+  const text = ["第一章 开始", hugeBody, "第二章 继续", "正文乙"].join("\n");
+  const chapters = chunkNovelText(text);
+  assert.ok(chapters.length > 3, "the oversized first heading's body should be sub-split");
+  assert.equal(chapters[0].title, "第一章 开始 (phần 1)");
+  // Every sub-split piece must stay under the cap, and the final real
+  // heading must still appear last, in its original order.
+  for (const c of chapters.slice(0, -1)) {
+    assert.ok(c.rawText.length <= 12000, `chunk too large: ${c.rawText.length}`);
+  }
+  assert.equal(chapters[chapters.length - 1].title, "第二章 继续");
+  assert.equal(chapters[chapters.length - 1].rawText, "正文乙");
+});

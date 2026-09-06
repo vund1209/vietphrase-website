@@ -9,6 +9,8 @@ import { fetchRawHtml } from "@/lib/browserFetch";
 import { HeadlessBrowserRequiredError } from "@/lib/fetchErrors";
 import { resolveAdapter } from "@/lib/extract/adapters";
 import { getDiscoverSource, type DiscoverSort } from "@/lib/discoverSources";
+import { translateText } from "@/lib/tokenizer";
+import { ensureDictionaryDb } from "@/lib/dictionaryDb";
 import { DiscoverBookCard } from "@/components/DiscoverBookCard";
 
 // A single source's live book list -- fetched and parsed on every request
@@ -95,7 +97,14 @@ export default async function DiscoverSourcePage({
   let books;
   try {
     const html = await fetchListHtmlCached(listUrl, userId !== null);
-    books = adapter.getBookList(html, listUrl);
+    // Belt-and-suspenders alongside instrumentation.ts's register() hook --
+    // see src/lib/novels.ts's getOrTranslateChapter for why this exists.
+    await ensureDictionaryDb();
+    books = adapter.getBookList(html, listUrl).map((book) => ({
+      ...book,
+      translatedTitle: translateText(book.title),
+      translatedDescription: book.description ? translateText(book.description) : null,
+    }));
   } catch (err) {
     if (err instanceof HeadlessBrowserRequiredError) {
       return <ErrorPage message={err.message} />;

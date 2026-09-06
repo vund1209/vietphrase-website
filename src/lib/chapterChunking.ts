@@ -45,10 +45,9 @@ const TARGET_CHUNK_CHARS = 3000;
 // pathological input -- no punctuation at all -- from scanning forever).
 const MAX_CHUNK_OVERRUN_CHARS = 1500;
 
-function chunkBySize(text: string): ParsedChapter[] {
-  const chunks: ParsedChapter[] = [];
+function splitIntoSizedPieces(text: string): string[] {
+  const pieces: string[] = [];
   let start = 0;
-  let chapterNumber = 1;
   while (start < text.length) {
     let end = Math.min(start + TARGET_CHUNK_CHARS, text.length);
     if (end < text.length) {
@@ -63,13 +62,43 @@ function chunkBySize(text: string): ParsedChapter[] {
       if (boundary !== -1) end = boundary;
     }
     const rawText = text.slice(start, end).trim();
-    if (rawText) {
-      chunks.push({ title: `Chương ${chapterNumber}`, rawText });
-      chapterNumber++;
-    }
+    if (rawText) pieces.push(rawText);
     start = end;
   }
-  return chunks;
+  return pieces;
+}
+
+function chunkBySize(text: string): ParsedChapter[] {
+  return splitIntoSizedPieces(text).map((rawText, i) => ({ title: `Chương ${i + 1}`, rawText }));
+}
+
+// A compiled novel file occasionally has a long stretch with no
+// recognizable heading at all (a different/unrecognized marker format,
+// or a genuine gap in the source) -- chunkByHeadings alone would then
+// silently swallow the entire stretch into whichever real heading came
+// right before it, producing one unreadable multi-megabyte "chapter"
+// and making everything after it look like it "jumped ahead" relative to
+// the reader's expected pacing. Cap any single heading-derived chunk's
+// size and, past that, fall back to the same sentence-boundary-aware
+// size splitting `chunkBySize` uses -- this only inserts additional
+// boundaries *inside* an oversized span, strictly in file order; it
+// never reorders or drops content, matching the request to prioritize
+// keeping raw content in order over trying to be clever about splits.
+const MAX_HEADING_CHUNK_CHARS = TARGET_CHUNK_CHARS * 4;
+
+function capOversizedChunks(chunks: ParsedChapter[]): ParsedChapter[] {
+  const result: ParsedChapter[] = [];
+  for (const chunk of chunks) {
+    if (chunk.rawText.length <= MAX_HEADING_CHUNK_CHARS) {
+      result.push(chunk);
+      continue;
+    }
+    const pieces = splitIntoSizedPieces(chunk.rawText);
+    pieces.forEach((rawText, i) => {
+      result.push({ title: pieces.length > 1 ? `${chunk.title} (phần ${i + 1})` : chunk.title, rawText });
+    });
+  }
+  return result;
 }
 
 function chunkByHeadings(lines: string[], headingIndices: number[]): ParsedChapter[] {
@@ -102,7 +131,7 @@ export function chunkNovelText(text: string): ParsedChapter[] {
   }, []);
 
   if (headingIndices.length > 0) {
-    return chunkByHeadings(lines, headingIndices);
+    return capOversizedChunks(chunkByHeadings(lines, headingIndices));
   }
   return chunkBySize(text);
 }
