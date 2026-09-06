@@ -121,8 +121,8 @@ export interface NovelSourceOption {
 /**
  * Derives the "source" filter's options from whatever `sourceUrl`s are
  * already in the library -- no hardcoded site list, so a newly-added
- * per-site adapter (src/lib/extract/adapters.ts) shows up here the moment
- * its first book is embedded, with no change needed in this function.
+ * site (src/lib/sites/) shows up here the moment its first book is
+ * embedded, with no change needed in this function.
  */
 export async function listNovelSources(): Promise<NovelSourceOption[]> {
   const novels = await prisma.novel.findMany({

@@ -1,9 +1,8 @@
 // Curated registry of known "import chapters from a URL" sources for
 // self-created novels -- same "interface + array + resolve-by-match"
-// idiom as src/lib/extract/adapters.ts's SiteAdapter/ADAPTERS/
-// resolveAdapter and src/lib/discoverSources.ts's DiscoverSource
-// registry, applied to a different domain (downloading a whole file to
-// hand to the existing .txt-chunking pipeline, not scraping HTML).
+// idiom as src/lib/sites/registry.ts's SiteDefinition/SITES/resolveSite,
+// applied to a different domain (downloading a whole file to hand to
+// the existing .txt-chunking pipeline, not scraping HTML).
 import { megaMatches, megaFetchFile, type DownloadProgress } from "./mega.ts";
 
 export type { DownloadProgress };

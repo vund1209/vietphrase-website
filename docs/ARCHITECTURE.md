@@ -155,15 +155,22 @@ designed, not yet validated against real pages):
   Readability), then run it through `scrape_blacklist` to strip ads and
   "to be continued"-style junk before it ever reaches the tokenizer.
 
-Per-site adapters, when needed, implement a common interface
-(`matches(url)`, `getBookMetadata(url)`, `getChapterList(url)`,
-`getChapterContent(url)`) and are tried before falling back to the
-generic extractor. Confirmed with the user this is the expected shape of
+Per-site support, when needed, lives as one file per site under
+`src/lib/sites/` (e.g. `sfacg.ts`, `fanqie.ts`, `shuba.ts`), each
+exporting a `SiteDefinition` (`src/lib/sites/types.ts`: `matches`,
+`getChapterList`, `getChapterContent`, plus optional `getBookMeta` and
+`discover` for Discover-mode browse-list support) registered in
+`src/lib/sites/registry.ts`'s `SITES` array, tried before falling back to
+the generic extractor. See `docs/ADDING_A_SITE.md` for the step-by-step
+contributor guide. Confirmed with the user this is the expected shape of
 things long-term, not just a stopgap: new Chinese novel sites get added
-by writing a new adapter for that site's specific pattern as it comes up,
+by writing a new file for that site's specific pattern as it comes up,
 same as sangtacviet.com and similar tools have historically done —
 support grows one site at a time, the generic extractor is there to give
 new/unsupported sites a reasonable shot rather than failing outright.
+This one-file-per-site registry (rather than one shared file growing
+per site) was adopted specifically so an open-source contributor can add
+a new site without touching any other site's code.
 
 ## Scrape timing: lazy, on first view — no job queue for v1
 

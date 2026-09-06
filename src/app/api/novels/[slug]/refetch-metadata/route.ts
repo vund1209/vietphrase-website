@@ -1,7 +1,7 @@
 // Admin-only: re-derives a novel's title/description/author/cover from its
 // source URL and overwrites the stored values. Needed because metadata
-// extraction has evolved (e.g. a site adapter added after a book was
-// already embedded, see src/lib/extract/adapters.ts's getBookMeta) --
+// extraction has evolved (e.g. a site definition added after a book was
+// already embedded, see src/lib/sites/'s getBookMeta) --
 // unlike chapter re-fetch (src/app/api/novels/[slug]/chapters/[number]/refetch/route.ts),
 // there's no lazy "null triggers a re-scrape" path for book-level
 // metadata, so this re-fetches eagerly instead of just clearing a cache.

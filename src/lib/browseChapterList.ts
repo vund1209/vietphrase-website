@@ -4,11 +4,12 @@
 // own "start reading" link buried in its proxied markup -- easy to miss
 // entirely on some sites (confirmed directly: book.sfacg.com's own link
 // is a small text link lost among a dozen other small nav links, not
-// something that reads as a button). Reusing the adapter/generic-
+// something that reads as a button). Reusing the site/generic-
 // extractor chapter-list logic already built for the embed pipeline
-// gives Browse mode the same reliable, prominent CTA every embedded
-// novel already gets via NovelProgressSection, for any source an
-// adapter (or the generic extractor) can already parse.
+// (src/lib/sites/registry.ts) gives Browse mode the same reliable,
+// prominent CTA every embedded novel already gets via
+// NovelProgressSection, for any source a site definition (or the
+// generic extractor) can already parse.
 //
 // Deliberately cheaper than scraper.ts's fetchChapterList: that helper
 // always re-fetches the given URL itself before extracting, which would
@@ -19,7 +20,7 @@
 // table-of-contents hop many sites split their landing page from, via
 // scraper.ts's own findTocLink -- when that free attempt comes up empty.
 import { extractChapterList } from "./extract/chapterList.ts";
-import { resolveAdapter } from "./extract/adapters.ts";
+import { resolveSite } from "./sites/registry.ts";
 import { findTocLink } from "./scraper.ts";
 import { fetchRawHtml } from "./browserFetch.ts";
 import type { ChapterListItem } from "./extract/types";
@@ -30,9 +31,9 @@ export async function tryGetBrowseChapterList(
   allowHeadless: boolean
 ): Promise<ChapterListItem[]> {
   try {
-    const adapter = resolveAdapter(url);
+    const site = resolveSite(url);
     const extract = (h: string, u: string): ChapterListItem[] =>
-      adapter ? adapter.getChapterList(h, u) : extractChapterList(h, u);
+      site ? site.getChapterList(h, u) : extractChapterList(h, u);
 
     const direct = extract(rawHtml, url);
     if (direct.length > 0) return direct;

@@ -5,7 +5,7 @@
 import * as cheerio from "cheerio";
 import { extractChapterList } from "./extract/chapterList.ts";
 import { extractChapterContent } from "./extract/chapterContent.ts";
-import { resolveAdapter } from "./extract/adapters.ts";
+import { resolveSite } from "./sites/registry.ts";
 import { filterBlacklist } from "./blacklist.ts";
 import { stripDangerousMarkup } from "./sanitizeText.ts";
 import { looksLikeBotChallenge } from "./botChallenge.ts";
@@ -50,6 +50,18 @@ interface FetchHtmlOptions {
 // didn't). A genuine non-challenge failure (404 etc.) still throws its own
 // descriptive error instead of silently trying a browser for no reason.
 async function fetchHtml(url: string, { allowHeadless = true }: FetchHtmlOptions = {}): Promise<string> {
+  const html = await fetchHtmlRaw(url, allowHeadless);
+  // Applied here, centrally, rather than in each of this file's callers
+  // (fetchChapterList/fetchBookMeta/fetchChapterContent) or in Browse
+  // mode's htmlProxy.ts separately -- every consumer of a fetched page's
+  // HTML gets a site's raw-HTML preprocessing (e.g. sites/fanqie.ts's
+  // font-deobfuscation) applied exactly once, right after the fetch,
+  // before any extraction/rendering happens downstream.
+  const site = resolveSite(url);
+  return site?.preprocessHtml ? site.preprocessHtml(html, url) : html;
+}
+
+async function fetchHtmlRaw(url: string, allowHeadless: boolean): Promise<string> {
   const res = await fetch(url, { headers: FETCH_HEADERS, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
   const html = await res.text();
   if (looksLikeBotChallenge(res.status, html)) {
@@ -190,16 +202,16 @@ interface BookMetaResult {
 
 // Metadata always comes from the originally requested landing page --
 // where a site puts its og:description/og:image/meta[author] tags --
-// unless the adapter overrides this (see SiteAdapter.getBookMeta's doc
+// unless the site overrides this (see SiteDefinition.getBookMeta's doc
 // comment: some sites' meta tags are generic SEO boilerplate, not the
 // book's actual title/synopsis).
 function deriveBookMeta(
   html: string,
   bookUrl: string,
-  adapter: ReturnType<typeof resolveAdapter>
+  site: ReturnType<typeof resolveSite>
 ): BookMetaResult {
   return (
-    adapter?.getBookMeta?.(html, bookUrl) ?? {
+    site?.getBookMeta?.(html, bookUrl) ?? {
       title: extractPageTitle(html),
       description: extractDescription(html),
       coverImageUrl: extractCoverImageUrl(html),
@@ -215,14 +227,14 @@ function deriveBookMeta(
 // list.
 export async function fetchBookMeta(bookUrl: string): Promise<BookMetaResult> {
   const html = await fetchHtml(bookUrl);
-  return deriveBookMeta(html, bookUrl, resolveAdapter(bookUrl));
+  return deriveBookMeta(html, bookUrl, resolveSite(bookUrl));
 }
 
 export async function fetchChapterList(bookUrl: string): Promise<FetchedChapterList> {
   const html = await fetchHtml(bookUrl);
-  const adapter = resolveAdapter(bookUrl);
+  const site = resolveSite(bookUrl);
   const extract = (h: string, u: string) =>
-    adapter ? adapter.getChapterList(h, u) : extractChapterList(h, u);
+    site ? site.getChapterList(h, u) : extractChapterList(h, u);
   let chapters = extract(html, bookUrl);
 
   if (chapters.length === 0) {
@@ -254,7 +266,7 @@ export async function fetchChapterList(bookUrl: string): Promise<FetchedChapterL
   // Metadata (description/cover/author) always comes from the originally
   // requested landing page, not a followed table-of-contents hop -- a TOC
   // page is typically just a chapter list.
-  const meta = deriveBookMeta(html, bookUrl, adapter);
+  const meta = deriveBookMeta(html, bookUrl, site);
   return {
     bookTitle: meta.title,
     description: meta.description,
@@ -290,9 +302,9 @@ export async function fetchChapterContent(
   options?: FetchHtmlOptions
 ): Promise<FetchedChapterContent> {
   const html = await fetchHtml(chapterUrl, options);
-  const adapter = resolveAdapter(chapterUrl);
-  const extracted = adapter
-    ? adapter.getChapterContent(html, chapterUrl)
+  const site = resolveSite(chapterUrl);
+  const extracted = site
+    ? await site.getChapterContent(html, chapterUrl)
     : extractChapterContent(html);
 
   const rawText = filterBlacklist(stripDangerousMarkup(extracted.text));

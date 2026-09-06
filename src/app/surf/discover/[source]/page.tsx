@@ -7,14 +7,14 @@ import { checkRateLimit } from "@/lib/rateLimit";
 import { logActivity } from "@/lib/adminActivity";
 import { fetchRawHtml } from "@/lib/browserFetch";
 import { HeadlessBrowserRequiredError } from "@/lib/fetchErrors";
-import { resolveAdapter } from "@/lib/extract/adapters";
-import { getDiscoverSource, type DiscoverSort } from "@/lib/discoverSources";
+import { getDiscoverSite } from "@/lib/sites/registry";
+import type { DiscoverSort } from "@/lib/sites/types";
 import { translateText } from "@/lib/tokenizer";
 import { ensureDictionaryDb } from "@/lib/dictionaryDb";
 import { DiscoverBookCard } from "@/components/DiscoverBookCard";
 
-// A single source's live book list -- fetched and parsed on every request
-// (adapter's getBookList), nothing written to Postgres here. Same
+// A single site's live book list -- fetched and parsed on every request
+// (the site definition's getBookList), nothing written to Postgres here. Same
 // rate-limiting/login-gated-headless-fallback shape as /surf/browse (see
 // the planning doc's section 5): anonymous browsing is allowed but
 // rate-limited, only a signed-in reader may escalate to a real headless
@@ -70,8 +70,8 @@ export default async function DiscoverSourcePage({
   searchParams: Promise<{ page?: string; sort?: string }>;
 }) {
   const { source: sourceId } = await params;
-  const source = getDiscoverSource(sourceId);
-  if (!source) notFound();
+  const site = getDiscoverSite(sourceId);
+  if (!site) notFound();
 
   const { page: pageParam, sort: sortParam } = await searchParams;
   const sort: DiscoverSort = sortParam === "weekly" ? "weekly" : "all";
@@ -88,11 +88,7 @@ export default async function DiscoverSourcePage({
     return <ErrorPage message="Bạn thao tác quá nhanh -- vui lòng thử lại sau ít phút." />;
   }
 
-  const listUrl = source.buildListUrl(page, sort);
-  const adapter = resolveAdapter(listUrl);
-  if (!adapter?.getBookList) {
-    return <ErrorPage message="Nguồn này chưa hỗ trợ xem danh sách truyện." />;
-  }
+  const listUrl = site.discover.buildListUrl(page, sort);
 
   let books;
   try {
@@ -100,7 +96,7 @@ export default async function DiscoverSourcePage({
     // Belt-and-suspenders alongside instrumentation.ts's register() hook --
     // see src/lib/novels.ts's getOrTranslateChapter for why this exists.
     await ensureDictionaryDb();
-    books = adapter.getBookList(html, listUrl).map((book) => ({
+    books = site.discover.getBookList(html, listUrl).map((book) => ({
       ...book,
       translatedTitle: translateText(book.title),
       translatedDescription: book.description ? translateText(book.description) : null,
@@ -116,8 +112,8 @@ export default async function DiscoverSourcePage({
     );
   }
 
-  const sortHref = (s: DiscoverSort) => `/surf/discover/${source.id}?sort=${s}`;
-  const pageHref = (p: number) => `/surf/discover/${source.id}?sort=${sort}&page=${p}`;
+  const sortHref = (s: DiscoverSort) => `/surf/discover/${site.id}?sort=${s}`;
+  const pageHref = (p: number) => `/surf/discover/${site.id}?sort=${sort}&page=${p}`;
 
   return (
     <main className="mx-auto flex max-w-5xl flex-1 flex-col gap-4 p-6">
@@ -129,9 +125,9 @@ export default async function DiscoverSourcePage({
       </Link>
 
       <div className="flex flex-col gap-1">
-        <h1 className="font-display text-2xl font-semibold">{source.displayName}</h1>
+        <h1 className="font-display text-2xl font-semibold">{site.displayName}</h1>
         <p className="text-sm text-muted-foreground">
-          Danh sách truyện thật lấy trực tiếp từ {source.hostname} -- bấm vào một truyện để đọc thử
+          Danh sách truyện thật lấy trực tiếp từ {site.discover.hostname} -- bấm vào một truyện để đọc thử
           ngay (dịch trực tiếp, không lưu lại), hoặc bấm &quot;Nhúng&quot; để thêm hẳn vào thư viện.
         </p>
       </div>

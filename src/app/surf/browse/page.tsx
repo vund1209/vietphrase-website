@@ -11,6 +11,7 @@ import { logActivity } from "@/lib/adminActivity";
 import { tryGetBrowseChapterList } from "@/lib/browseChapterList";
 import { translateText } from "@/lib/tokenizer";
 import { ensureDictionaryDb } from "@/lib/dictionaryDb";
+import { resolveSite } from "@/lib/sites/registry";
 
 // Browse mode: a real, link-clickable proxy of the original site with
 // translation applied in place -- see docs/PLANNED_FEATURES.md's
@@ -65,6 +66,14 @@ export default async function BrowsePage({
   let rawHtml: string;
   try {
     rawHtml = await fetchRawHtml(url, { allowHeadless: userId !== null });
+    // Browse mode's own fetch (browserFetch.ts's fetchRawHtml) is a
+    // separate path from src/lib/scraper.ts's fetchHtml (which applies
+    // this centrally for the embed pipeline) -- htmlProxy.ts is entirely
+    // site-agnostic and has no other hook into per-site knowledge, so
+    // this is applied explicitly here. See SiteDefinition.preprocessHtml's
+    // doc comment (src/lib/sites/types.ts).
+    const site = resolveSite(url);
+    if (site?.preprocessHtml) rawHtml = await site.preprocessHtml(rawHtml, url);
     bodyHtml = await buildProxyPage(rawHtml, { pageUrl: url, translate });
   } catch (err) {
     if (err instanceof HeadlessBrowserRequiredError) {

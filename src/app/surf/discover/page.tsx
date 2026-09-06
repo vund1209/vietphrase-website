@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Globe } from "@phosphor-icons/react/dist/ssr";
-import { DISCOVER_SOURCES } from "@/lib/discoverSources";
+import { listDiscoverSites } from "@/lib/sites/registry";
 
 // Discover mode's source picker -- browse a curated list of known
 // Chinese web-novel sites (currently just book.sfacg.com), then drill
@@ -21,15 +21,15 @@ export default function DiscoverSourcesPage() {
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
-        {DISCOVER_SOURCES.map((source) => (
+        {listDiscoverSites().map((site) => (
           <Link
-            key={source.id}
-            href={`/surf/discover/${source.id}`}
+            key={site.id}
+            href={`/surf/discover/${site.id}`}
             className="flex cursor-pointer flex-col items-start gap-2 rounded-lg border border-border bg-card p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
           >
             <Globe size={22} className="text-accent" weight="duotone" />
-            <span className="font-medium">{source.displayName}</span>
-            <span className="text-xs text-muted-foreground">{source.hostname}</span>
+            <span className="font-medium">{site.displayName}</span>
+            <span className="text-xs text-muted-foreground">{site.discover.hostname}</span>
           </Link>
         ))}
       </div>

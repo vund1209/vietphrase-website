@@ -134,9 +134,9 @@ the app exists.
   the real machine directly: `npm run dev`, then add
   `https://book.sfacg.com/Novel/530508/` or `https://www.69shuba.com/
   book/90442.htm` (or any book/chapter URL) through the home page's
-  add-book form and confirm a chapter reads correctly. If either real
-  site's structure trips up the generic extractor, add a per-site
-  adapter (`src/lib/extract/adapters.ts`) for it.
+  add-book form and confirm a chapter reads correctly. If a site's
+  structure trips up the generic extractor, add a per-site file under
+  `src/lib/sites/` -- see `docs/ADDING_A_SITE.md`.
 - **Done, migration applied**: user accounts (email + password,
   READER/EDITOR roles) and per-word interactive overrides -- click any
   translated word while reading to see its Hán-Việt reading and its
