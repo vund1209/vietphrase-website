@@ -7,7 +7,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { BookOpen, List, MagnifyingGlass, Translate, X } from "@phosphor-icons/react";
+import { useSession } from "next-auth/react";
+import { BookOpen, BookBookmark, List, MagnifyingGlass, Translate, X } from "@phosphor-icons/react";
 import { AuthNav } from "./AuthNav";
 import { ThemeToggle } from "./ThemeToggle";
 
@@ -17,8 +18,16 @@ const NAV_ITEMS = [
   { href: "/surf", label: "Đọc web", icon: BookOpen },
 ];
 
+// Admin-only: previously had no nav entry at all, so an admin who just
+// applied a global dictionary correction (SpanEditor's "Áp dụng cho tất cả
+// truyện") had no way to find /admin/dictionary to review/manage it.
+const ADMIN_NAV_ITEM = { href: "/admin/dictionary", label: "Từ điển chung", icon: BookBookmark };
+
 export function SiteHeader() {
   const pathname = usePathname();
+  const { data: session } = useSession();
+  const isAdmin = session?.user?.role === "ADMIN";
+  const navItems = isAdmin ? [...NAV_ITEMS, ADMIN_NAV_ITEM] : NAV_ITEMS;
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
@@ -29,7 +38,7 @@ export function SiteHeader() {
         </Link>
 
         <span className="hidden items-center gap-1 md:flex">
-          {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
+          {navItems.map(({ href, label, icon: Icon }) => {
             const active = pathname === href || pathname.startsWith(`${href}/`);
             return (
               <Link
@@ -66,7 +75,7 @@ export function SiteHeader() {
 
       {mobileOpen && (
         <div className="flex flex-col gap-1 border-t border-border px-6 py-3 text-sm md:hidden">
-          {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
+          {navItems.map(({ href, label, icon: Icon }) => {
             const active = pathname === href || pathname.startsWith(`${href}/`);
             return (
               <Link

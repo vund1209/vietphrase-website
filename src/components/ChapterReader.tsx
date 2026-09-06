@@ -170,7 +170,13 @@ export function ChapterReader({
     };
     setTokenLines((prev) =>
       prev.map((tline) => {
-        const joined = tline.map((t) => t.chinese).join(" ");
+        // No separator here -- must match how `chinese` itself is built
+        // (spanTokens.map(t => t.chinese).join("")) above, or a genuine
+        // multi-token match (the common case: merging several
+        // single-character tokens into one new phrase/Name) is missed
+        // and this whole line is skipped, leaving the old tokens on
+        // screen until the next full page load.
+        const joined = tline.map((t) => t.chinese).join("");
         if (!joined.includes(chinese)) return tline;
         // Rebuild the line, replacing any exact run of tokens whose
         // concatenated chinese text equals the saved span with one

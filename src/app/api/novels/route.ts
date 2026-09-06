@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { fetchChapterList, extractSourceChapterId } from "@/lib/scraper";
 import { slugFromSourceUrl, withSuffix } from "@/lib/slug";
 import { translateText } from "@/lib/tokenizer";
+import { loadGlobalWordOverrides } from "@/lib/overrides";
 
 export interface NovelSummary {
   slug: string;
@@ -62,9 +63,13 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ error: message }, { status: 422 });
   }
 
+  // No per-novel Name overrides exist yet for a book that isn't in the DB
+  // yet -- global corrections are the only layer that can apply here.
+  const { translations, capStyles } = await loadGlobalWordOverrides();
+
   const originalTitle =
     fetched.bookTitle?.trim() || `Truyện chưa đặt tên (${new URL(url).hostname})`;
-  const title = translateText(originalTitle);
+  const title = translateText(originalTitle, translations, capStyles);
   const baseSlug = slugFromSourceUrl(url);
 
   // `data/seed/dictionary_seed.db` reasoning aside, this is a small
@@ -79,7 +84,7 @@ export async function POST(request: Request): Promise<Response> {
       slug,
       title,
       originalTitle,
-      description: fetched.description ? translateText(fetched.description) : null,
+      description: fetched.description ? translateText(fetched.description, translations, capStyles) : null,
       originalDescription: fetched.description,
       coverImageUrl: fetched.coverImageUrl,
       author: fetched.author,
@@ -89,7 +94,7 @@ export async function POST(request: Request): Promise<Response> {
         createMany: {
           data: fetched.chapters.map((c, i) => ({
             chapterNumber: i + 1,
-            title: translateText(c.title),
+            title: translateText(c.title, translations, capStyles),
             originalTitle: c.title,
             sourceChapterId: extractSourceChapterId(c.url),
             sourceUrl: c.url,

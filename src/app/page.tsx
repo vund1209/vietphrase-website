@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Translate } from "@phosphor-icons/react/dist/ssr";
+import { CaretRight, Translate } from "@phosphor-icons/react/dist/ssr";
 import { prisma } from "@/lib/prisma";
 import { auth, isAdmin } from "@/lib/auth";
 import { getReaderId } from "@/lib/readerId";
@@ -31,7 +31,7 @@ export default async function HomePage() {
           where: { readerId },
           orderBy: { updatedAt: "desc" },
           take: 6,
-          include: { novel: { include: { _count: { select: { chapters: true } } } } },
+          include: { novel: { select: { slug: true, title: true } } },
         })
       : Promise.resolve([]),
   ]);
@@ -62,22 +62,21 @@ export default async function HomePage() {
       {inProgress.length > 0 && (
         <section className="flex flex-col gap-3">
           <h2 className="font-display text-xl font-semibold">Tiếp tục đọc</h2>
-          <NovelGrid>
+          <div className="flex flex-col divide-y divide-border rounded-lg border border-border bg-card">
             {inProgress.map((p) => (
-              <NovelCard
+              <Link
                 key={p.novel.slug}
-                slug={p.novel.slug}
-                title={p.novel.title}
-                author={p.novel.author}
-                coverImageUrl={p.novel.coverImageUrl}
-                chapterCount={p.novel._count.chapters}
-                canDelete={false}
                 href={`/novels/${p.novel.slug}/chapters/${p.chapterNumber}`}
-                subtitle={`Chương ${p.chapterNumber}`}
-                description={p.novel.description}
-              />
+                className="flex items-center justify-between gap-3 px-4 py-3 transition-colors hover:bg-muted"
+              >
+                <span className="truncate font-medium">{p.novel.title}</span>
+                <span className="flex shrink-0 items-center gap-1 text-sm text-muted-foreground">
+                  Chương {p.chapterNumber}
+                  <CaretRight size={14} />
+                </span>
+              </Link>
             ))}
-          </NovelGrid>
+          </div>
         </section>
       )}
 

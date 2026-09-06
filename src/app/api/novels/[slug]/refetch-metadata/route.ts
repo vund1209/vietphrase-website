@@ -9,6 +9,7 @@ import { auth, isAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { fetchBookMeta } from "@/lib/scraper";
 import { translateText } from "@/lib/tokenizer";
+import { loadOverridesForNovel } from "@/lib/overrides";
 
 export async function POST(
   _request: Request,
@@ -39,12 +40,18 @@ export async function POST(
     return Response.json({ error: message }, { status: 422 });
   }
 
+  // Without this, a global/shared-dictionary correction added *after* the
+  // book was embedded (e.g. marking a name's Tr) never reaches the stored
+  // title/description even on a manual refresh -- they'd keep being
+  // translated against only the base dictionary forever.
+  const { translations, capStyles } = await loadOverridesForNovel(novel.id);
+
   const updated = await prisma.novel.update({
     where: { id: novel.id },
     data: {
-      title: meta.title ? translateText(meta.title) : undefined,
+      title: meta.title ? translateText(meta.title, translations, capStyles) : undefined,
       originalTitle: meta.title ?? undefined,
-      description: meta.description ? translateText(meta.description) : null,
+      description: meta.description ? translateText(meta.description, translations, capStyles) : null,
       originalDescription: meta.description ?? null,
       author: meta.author ?? undefined,
       coverImageUrl: meta.coverImageUrl ?? undefined,
