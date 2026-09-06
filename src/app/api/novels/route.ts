@@ -3,6 +3,7 @@ import { fetchChapterList, extractSourceChapterId } from "@/lib/scraper";
 import { slugFromSourceUrl, withSuffix } from "@/lib/slug";
 import { translateText } from "@/lib/tokenizer";
 import { loadGlobalWordOverrides } from "@/lib/overrides";
+import { ensureDictionaryDb } from "@/lib/dictionaryDb";
 
 export interface NovelSummary {
   slug: string;
@@ -47,6 +48,10 @@ export async function POST(request: Request): Promise<Response> {
   } catch {
     return Response.json({ error: "url is not a valid URL" }, { status: 400 });
   }
+
+  // Belt-and-suspenders alongside instrumentation.ts's register() hook --
+  // see src/lib/novels.ts's getOrTranslateChapter for why this exists.
+  await ensureDictionaryDb();
 
   // Idempotent: adding the same book URL twice returns the existing
   // novel rather than creating a duplicate.

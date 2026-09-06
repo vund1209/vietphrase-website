@@ -5,6 +5,7 @@ import { getNovelBySlug } from "@/lib/novels";
 import { auth, isAdmin } from "@/lib/auth";
 import { getReadingProgress } from "@/lib/readerId";
 import { hanVietOf } from "@/lib/tokenizer";
+import { ensureDictionaryDb } from "@/lib/dictionaryDb";
 import { CompletionStatusToggle } from "@/components/CompletionStatusToggle";
 import { AdminActionsMenu } from "@/components/AdminActionsMenu";
 
@@ -33,6 +34,9 @@ export default async function NovelPage({
   if (!novel) notFound();
   const canDelete = isAdmin(session?.user?.role);
   const progress = await getReadingProgress(novel.id);
+  // Belt-and-suspenders alongside instrumentation.ts's register() hook --
+  // see src/lib/novels.ts's getOrTranslateChapter for why this exists.
+  if (novel.originalTitle) await ensureDictionaryDb();
   const hanViet = novel.originalTitle ? hanVietOf(novel.originalTitle) : null;
   const firstAppear = novel.createdAt.toLocaleDateString("vi-VN");
 

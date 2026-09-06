@@ -45,7 +45,7 @@ export default async function BrowsePage({
   let bodyHtml: string;
   try {
     const rawHtml = await fetchRawHtml(url);
-    bodyHtml = buildProxyPage(rawHtml, { pageUrl: url, translate });
+    bodyHtml = await buildProxyPage(rawHtml, { pageUrl: url, translate });
   } catch (err) {
     return (
       <main className="mx-auto flex max-w-3xl flex-1 flex-col gap-4 p-6">

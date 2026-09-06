@@ -13,6 +13,7 @@ import { prisma } from "@/lib/prisma";
 import { fetchChapterContent } from "@/lib/scraper";
 import { translateText, tokenizeLines, type DisplayToken } from "@/lib/tokenizer";
 import { loadOverridesForNovel, loadOverridesForUser } from "@/lib/overrides";
+import { ensureDictionaryDb } from "@/lib/dictionaryDb";
 
 export class ChapterNotFoundError extends Error {}
 export class ScrapeFailedError extends Error {}
@@ -50,6 +51,15 @@ export async function getOrTranslateChapter(
   chapterNumber: number,
   userId?: number
 ): Promise<ChapterResult> {
+  // Belt-and-suspenders alongside instrumentation.ts's register() hook:
+  // getTokenizer() (src/lib/tokenizer.ts) is synchronous and only trusts
+  // that the dictionary download already finished by the time it's
+  // called -- if that assumption is ever wrong on a cold serverless
+  // instance (observed in production as "unable to open database file"),
+  // this closes the race directly at the point of use. Idempotent/fast
+  // once the file is already present (two fs.statSync calls).
+  await ensureDictionaryDb();
+
   const novel = await prisma.novel.findUnique({ where: { slug } });
   if (!novel) throw new ChapterNotFoundError("Novel not found");
 

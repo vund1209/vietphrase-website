@@ -10,6 +10,7 @@ import { prisma } from "@/lib/prisma";
 import { fetchBookMeta } from "@/lib/scraper";
 import { translateText } from "@/lib/tokenizer";
 import { loadOverridesForNovel } from "@/lib/overrides";
+import { ensureDictionaryDb } from "@/lib/dictionaryDb";
 
 export async function POST(
   _request: Request,
@@ -39,6 +40,10 @@ export async function POST(
     const message = err instanceof Error ? err.message : "Failed to fetch metadata";
     return Response.json({ error: message }, { status: 422 });
   }
+
+  // Belt-and-suspenders alongside instrumentation.ts's register() hook --
+  // see src/lib/novels.ts's getOrTranslateChapter for why this exists.
+  await ensureDictionaryDb();
 
   // Without this, a global/shared-dictionary correction added *after* the
   // book was embedded (e.g. marking a name's Tr) never reaches the stored

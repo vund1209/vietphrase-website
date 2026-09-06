@@ -8,6 +8,7 @@
 import { fetchChapterContent } from "@/lib/scraper";
 import { translateText } from "@/lib/tokenizer";
 import { isSafePublicUrl } from "@/lib/urlSafety";
+import { ensureDictionaryDb } from "@/lib/dictionaryDb";
 
 export async function POST(request: Request): Promise<Response> {
   const body = await request.json().catch(() => null);
@@ -36,6 +37,10 @@ export async function POST(request: Request): Promise<Response> {
       translated: false,
     });
   }
+
+  // Belt-and-suspenders alongside instrumentation.ts's register() hook --
+  // see src/lib/novels.ts's getOrTranslateChapter for why this exists.
+  await ensureDictionaryDb();
 
   return Response.json({
     title: fetched.title ? translateText(fetched.title) : null,

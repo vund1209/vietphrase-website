@@ -9,6 +9,7 @@
 // not full site functionality (search/forms/login etc).
 import * as cheerio from "cheerio";
 import { translateText } from "@/lib/tokenizer";
+import { ensureDictionaryDb } from "@/lib/dictionaryDb";
 
 const SKIP_TEXT_TAGS = new Set(["script", "style", "noscript", "svg", "textarea"]);
 
@@ -52,7 +53,14 @@ export interface ProxyPageOptions {
  * Rewrites raw HTML for Browse mode. `pageUrl` is the URL this HTML was
  * fetched from (used to resolve relative links/assets).
  */
-export function buildProxyPage(html: string, { pageUrl, translate }: ProxyPageOptions): string {
+export async function buildProxyPage(
+  html: string,
+  { pageUrl, translate }: ProxyPageOptions
+): Promise<string> {
+  // Belt-and-suspenders alongside instrumentation.ts's register() hook --
+  // see src/lib/novels.ts's getOrTranslateChapter for why this exists.
+  if (translate) await ensureDictionaryDb();
+
   const $ = cheerio.load(html);
   const base = new URL(pageUrl);
 

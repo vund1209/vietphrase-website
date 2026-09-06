@@ -7,6 +7,7 @@ import { auth, isAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { fetchChapterList, extractSourceChapterId, selectNewChapters } from "@/lib/scraper";
 import { translateText } from "@/lib/tokenizer";
+import { ensureDictionaryDb } from "@/lib/dictionaryDb";
 
 export async function POST(
   _request: Request,
@@ -43,6 +44,10 @@ export async function POST(
     const message = err instanceof Error ? err.message : "Failed to fetch chapter list";
     return Response.json({ error: message }, { status: 422 });
   }
+
+  // Belt-and-suspenders alongside instrumentation.ts's register() hook --
+  // see src/lib/novels.ts's getOrTranslateChapter for why this exists.
+  await ensureDictionaryDb();
 
   const existingSourceUrls = new Set(novel.chapters.map((c) => c.sourceUrl));
   const newChapters = selectNewChapters(existingSourceUrls, fetched.chapters);

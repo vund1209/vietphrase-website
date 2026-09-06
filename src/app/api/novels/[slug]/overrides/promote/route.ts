@@ -8,6 +8,7 @@ import { auth, isEditorOrAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { translateText } from "@/lib/tokenizer";
 import { loadOverridesForNovel, validateOverridePair, validateCapStyle } from "@/lib/overrides";
+import { ensureDictionaryDb } from "@/lib/dictionaryDb";
 
 export async function POST(
   request: Request,
@@ -43,6 +44,10 @@ export async function POST(
   if (!validateCapStyle(capStyle)) {
     return Response.json({ error: "Invalid capStyle" }, { status: 400 });
   }
+
+  // Belt-and-suspenders alongside instrumentation.ts's register() hook --
+  // see src/lib/novels.ts's getOrTranslateChapter for why this exists.
+  await ensureDictionaryDb();
 
   const editorId = Number(session.user.id);
   const name = await prisma.name.upsert({
