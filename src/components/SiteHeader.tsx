@@ -11,6 +11,7 @@ import { useSession } from "next-auth/react";
 import { BookOpen, BookBookmark, List, MagnifyingGlass, Translate, X } from "@phosphor-icons/react";
 import { AuthNav } from "./AuthNav";
 import { ThemeToggle } from "./ThemeToggle";
+import { DictionaryStatusDot } from "./DictionaryStatusDot";
 
 const NAV_ITEMS = [
   { href: "/translate", label: "Dịch nhanh", icon: Translate },
@@ -59,7 +60,8 @@ export function SiteHeader() {
 
         <span className="ml-auto flex items-center gap-2">
           <ThemeToggle />
-          <span className="hidden md:flex">
+          <span className="hidden items-center gap-2 md:flex">
+            <DictionaryStatusDot />
             <AuthNav />
           </span>
           <button
@@ -91,7 +93,8 @@ export function SiteHeader() {
               </Link>
             );
           })}
-          <div className="mt-2 border-t border-border pt-2">
+          <div className="mt-2 flex items-center gap-2 border-t border-border pt-2">
+            <DictionaryStatusDot />
             <AuthNav />
           </div>
         </div>
