@@ -1,6 +1,9 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
+import { CaretLeft, CaretRight } from "@phosphor-icons/react/dist/ssr";
 import { auth, isAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { ClearActivityLogButton } from "@/components/ClearActivityLogButton";
 
 // Admin-only: browse the audit trail written by src/lib/adminActivity.ts
 // (novel add/delete, dictionary edits, promotions, re-fetches, rate-limit
@@ -40,60 +43,74 @@ export default async function AdminActivityPage({
 
   return (
     <main className="mx-auto flex max-w-3xl flex-1 flex-col gap-4 p-6">
-      <h1 className="text-xl font-semibold">Nhật ký hoạt động quản trị</h1>
-      <p className="text-sm text-neutral-500">
-        Ghi lại hành động quản trị/nhúng truyện -- xem{" "}
-        <code className="rounded bg-neutral-100 px-1 dark:bg-neutral-800">src/lib/adminActivity.ts</code>.
-      </p>
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-xl font-semibold">Nhật ký hoạt động quản trị</h1>
+          <p className="text-sm text-neutral-500">
+            Ghi lại hành động quản trị/nhúng truyện -- xem{" "}
+            <code className="rounded bg-neutral-100 px-1 dark:bg-neutral-800">src/lib/adminActivity.ts</code>.
+          </p>
+        </div>
+        {total > 0 && <ClearActivityLogButton />}
+      </div>
 
       {entries.length === 0 ? (
         <p className="text-sm text-neutral-400">Chưa có hoạt động nào.</p>
       ) : (
-        <ul className="flex flex-col divide-y divide-neutral-200 dark:divide-neutral-800">
-          {entries.map((entry) => (
-            <li key={entry.id} className="flex flex-col gap-0.5 py-3 text-sm">
-              <div className="flex items-center justify-between gap-2">
-                <span className="font-medium">{entry.action}</span>
-                <span className="text-xs text-neutral-400">
-                  {entry.createdAt.toLocaleString("vi-VN")}
+        <>
+          <p className="text-xs text-neutral-400">Tổng: {total} mục</p>
+          <ul className="flex flex-col divide-y divide-neutral-200 dark:divide-neutral-800">
+            {entries.map((entry) => (
+              <li key={entry.id} className="flex flex-col gap-0.5 py-3 text-sm">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-medium">{entry.action}</span>
+                  <span className="text-xs text-neutral-400">
+                    {entry.createdAt.toLocaleString("vi-VN")}
+                  </span>
+                </div>
+                <span className="text-neutral-500">
+                  {entry.user?.email ?? "(ẩn danh)"}
+                  {entry.targetType && entry.targetId && (
+                    <>
+                      {" "}
+                      → {entry.targetType}:{entry.targetId}
+                    </>
+                  )}
                 </span>
-              </div>
-              <span className="text-neutral-500">
-                {entry.user?.email ?? "(ẩn danh)"}
-                {entry.targetType && entry.targetId && (
-                  <>
-                    {" "}
-                    → {entry.targetType}:{entry.targetId}
-                  </>
+                {entry.metadata !== null && entry.metadata !== undefined && (
+                  <pre className="overflow-x-auto rounded bg-neutral-100 p-2 text-xs text-neutral-500 dark:bg-neutral-800">
+                    {JSON.stringify(entry.metadata)}
+                  </pre>
                 )}
-              </span>
-              {entry.metadata !== null && entry.metadata !== undefined && (
-                <pre className="overflow-x-auto rounded bg-neutral-100 p-2 text-xs text-neutral-500 dark:bg-neutral-800">
-                  {JSON.stringify(entry.metadata)}
-                </pre>
-              )}
-            </li>
-          ))}
-        </ul>
+              </li>
+            ))}
+          </ul>
+        </>
       )}
 
       {totalPages > 1 && (
         <div className="flex items-center justify-between text-sm">
+          <Link
+            href={`/admin/activity?page=${Math.max(1, page - 1)}`}
+            aria-disabled={page <= 1}
+            className={`flex items-center gap-1 rounded-md border border-neutral-200 px-3 py-1.5 hover:bg-neutral-100 dark:border-neutral-800 dark:hover:bg-neutral-800 ${
+              page <= 1 ? "pointer-events-none opacity-40" : ""
+            }`}
+          >
+            <CaretLeft size={14} /> Trước
+          </Link>
           <span className="text-neutral-400">
             Trang {page} / {totalPages}
           </span>
-          <div className="flex gap-2">
-            {page > 1 && (
-              <a href={`/admin/activity?page=${page - 1}`} className="underline">
-                ← Trước
-              </a>
-            )}
-            {page < totalPages && (
-              <a href={`/admin/activity?page=${page + 1}`} className="underline">
-                Sau →
-              </a>
-            )}
-          </div>
+          <Link
+            href={`/admin/activity?page=${Math.min(totalPages, page + 1)}`}
+            aria-disabled={page >= totalPages}
+            className={`flex items-center gap-1 rounded-md border border-neutral-200 px-3 py-1.5 hover:bg-neutral-100 dark:border-neutral-800 dark:hover:bg-neutral-800 ${
+              page >= totalPages ? "pointer-events-none opacity-40" : ""
+            }`}
+          >
+            Sau <CaretRight size={14} />
+          </Link>
         </div>
       )}
     </main>
